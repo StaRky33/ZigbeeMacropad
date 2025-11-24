@@ -42,11 +42,10 @@ static const gpio_num_t BTN_PINS[BTN_COUNT] = {
 #define DEBOUNCE_MS        30
 #define DOUBLE_CLICK_MS   400
 #define LONG_PRESS_MS    1000
-#define CUSTOM_CLUSTER_ID        0xFC00    // arbitrary manufacturer-specific range
-#define ATTR_BRIGHTNESS_ID       0x0001
-#define CONFIG_ENDPOINT     10
 
-static uint32_t zb_brightness = 100; // default brightness (0–255)
+/* --- Endpoint and clusters -------------------------------------- */
+#define CUSTOM_CLUSTER_ID        0xFC00    // arbitrary manufacturer-specific range
+#define CONFIG_ENDPOINT     10
 
 /* --- Button state machine ----------------------------------------------- */
 typedef struct {
@@ -221,7 +220,6 @@ static void on_button_action(uint8_t index, action_t act) {
 /* ======================================================================= */
 static void button_task(void *arg)
 {
-    const uint64_t poll_interval_us = BTN_POLL_INTERVAL_MS * 1000ULL;
     const uint64_t debounce_us      = DEBOUNCE_MS * 1000ULL;
     const uint64_t double_click_us  = DOUBLE_CLICK_MS * 1000ULL;
     const uint64_t long_press_us    = LONG_PRESS_MS * 1000ULL;
@@ -337,9 +335,6 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *sig)
             ESP_LOGI(TAG, "Steering failed → retry & blink");
             esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
             esp_zb_scheduler_alarm((esp_zb_callback_t)zb_blink_step, 0, 0);
-            esp_zb_scheduler_alarm((esp_zb_callback_t)
-                                   esp_zb_bdb_start_top_level_commissioning,
-                                   ESP_ZB_BDB_MODE_NETWORK_STEERING, 2000);
         }
         break;
 
@@ -361,127 +356,69 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *sig)
 }
 
 /* ======================================================================= */
-/*                ZCL attribute handler (ONLY BRIGHTNESS)                   */
-/* ======================================================================= */
-static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t *message)
-{
-    ESP_RETURN_ON_FALSE(message, ESP_FAIL, TAG, "Empty message");
-
-    if (message->info.cluster == CUSTOM_CLUSTER_ID &&
-        message->attribute.id == ATTR_BRIGHTNESS_ID &&
-        message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_U8 &&
-        message->attribute.data.value)
-    {
-        zb_brightness = *(uint8_t*)message->attribute.data.value;
-        ESP_LOGI(TAG, "New brightness = %u", (unsigned int)zb_brightness);
-
-        light_driver_set_power(zb_brightness > 0);
-        light_driver_set_level(zb_brightness);
-        return ESP_OK;
-    }
-
-    return ESP_OK;
-}
-
-static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id, const void *message)
-{
-    if (callback_id == ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID)
-        return zb_attribute_handler((esp_zb_zcl_set_attr_value_message_t *)message);
-    return ESP_OK;
-}
-
-/* ======================================================================= */
-/*                       ZIGBEE STACK TASK                                 */
+/*                       ZIGBEE STACK TASK (manual Level Control)          */
 /* ======================================================================= */
 static void esp_zb_task(void *pv)
 {
-    // --- Zigbee stack init (router mode) ---
+    /*---------------------------------------------------------------
+     * Initialize Zigbee stack (router mode)
+     *-------------------------------------------------------------*/
     esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZR_CONFIG();
     esp_zb_init(&zb_nwk_cfg);
 
     /*---------------------------------------------------------------
-    * BASIC CLUSTER (mandatory)
-    *-------------------------------------------------------------*/
+     * BASIC CLUSTER (mandatory)
+     *-------------------------------------------------------------*/
     esp_zb_basic_cluster_cfg_t basic_cfg = {
-        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
+        .zcl_version  = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
         .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DC_SOURCE,
     };
     esp_zb_attribute_list_t *basic_cluster = esp_zb_basic_cluster_create(&basic_cfg);
 
-    // Add manufacturer + model strings
     static const char manufacturer_name[] = ESP_MANUFACTURER_NAME;
     static const char model_identifier[]  = ESP_MODEL_IDENTIFIER;
 
-    ESP_ERROR_CHECK(
-        esp_zb_cluster_add_attr(basic_cluster,
-                                ESP_ZB_ZCL_CLUSTER_ID_BASIC,
-                                ESP_ZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID,
-                                ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
-                                ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
-                                (void *)manufacturer_name)
-    );
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(basic_cluster,
+                                            ESP_ZB_ZCL_CLUSTER_ID_BASIC,
+                                            ESP_ZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID,
+                                            ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+                                            (void *)manufacturer_name));
 
-    ESP_ERROR_CHECK(
-        esp_zb_cluster_add_attr(basic_cluster,
-                                ESP_ZB_ZCL_CLUSTER_ID_BASIC,
-                                ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID,
-                                ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
-                                ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
-                                (void *)model_identifier)
-    );
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(basic_cluster,
+                                            ESP_ZB_ZCL_CLUSTER_ID_BASIC,
+                                            ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID,
+                                            ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+                                            (void *)model_identifier));
 
     /*---------------------------------------------------------------
      * IDENTIFY CLUSTER (mandatory)
      *-------------------------------------------------------------*/
-    esp_zb_identify_cluster_cfg_t identify_cfg = {
-        .identify_time = 0,
-    };
+    esp_zb_identify_cluster_cfg_t identify_cfg = {.identify_time = 0};
     esp_zb_attribute_list_t *identify_cluster = esp_zb_identify_cluster_create(&identify_cfg);
 
     /*---------------------------------------------------------------
-     * CUSTOM CLUSTER (for brightness attribute)
-     *-------------------------------------------------------------*/
-    esp_zb_attribute_list_t *custom_cluster = esp_zb_zcl_attr_list_create(CUSTOM_CLUSTER_ID);
-    ESP_ERROR_CHECK(custom_cluster ? ESP_OK : ESP_FAIL);
-
-    ESP_ERROR_CHECK(
-        esp_zb_cluster_add_attr(custom_cluster,
-                                CUSTOM_CLUSTER_ID,
-                                ATTR_BRIGHTNESS_ID,
-                                ESP_ZB_ZCL_ATTR_TYPE_U8,
-                                ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
-                                &zb_brightness)
-    );
-
-    /*---------------------------------------------------------------
-     * CLUSTER LIST (add mandatory + custom)
+     * CLUSTER LIST (Basic + Identify)
      *-------------------------------------------------------------*/
     esp_zb_cluster_list_t *cluster_list = esp_zb_zcl_cluster_list_create();
     ESP_ERROR_CHECK(cluster_list ? ESP_OK : ESP_FAIL);
 
-    ESP_ERROR_CHECK(
-        esp_zb_cluster_list_add_basic_cluster(cluster_list,
-                                              basic_cluster,
-                                              ESP_ZB_ZCL_CLUSTER_SERVER_ROLE)
-    );
-    ESP_ERROR_CHECK(
-        esp_zb_cluster_list_add_identify_cluster(cluster_list,
-                                                 identify_cluster,
-                                                 ESP_ZB_ZCL_CLUSTER_SERVER_ROLE)
-    );
-    ESP_ERROR_CHECK(
-        esp_zb_cluster_list_add_custom_cluster(cluster_list,
-                                               custom_cluster,
-                                               ESP_ZB_ZCL_CLUSTER_SERVER_ROLE)
-    );
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(cluster_list,
+                                                          basic_cluster,
+                                                          ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(cluster_list,
+                                                             identify_cluster,
+                                                             ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
 
     /*---------------------------------------------------------------
-     * ENDPOINT + DEVICE CONFIGURATION
+     * ENDPOINT CONFIGURATION
      *-------------------------------------------------------------*/
     esp_zb_endpoint_config_t ep_cfg = {
-        .endpoint = CONFIG_ENDPOINT,                // e.g., 10
-        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,  // Home Automation profile
-        .app_device_id = 0x1234,                    // Custom device type
+        .endpoint           = CONFIG_ENDPOINT,               // typically 10
+        .app_profile_id     = ESP_ZB_AF_HA_PROFILE_ID,
+        .app_device_id      = ESP_ZB_HA_DIMMABLE_LIGHT_DEVICE_ID,
         .app_device_version = 1,
     };
 
@@ -490,10 +427,9 @@ static void esp_zb_task(void *pv)
     ESP_ERROR_CHECK(esp_zb_ep_list_add_ep(ep_list, cluster_list, ep_cfg));
 
     /*---------------------------------------------------------------
-     * REGISTER DEVICE + HANDLERS
+     * REGISTER DEVICE + CALLBACKS
      *-------------------------------------------------------------*/
     esp_zb_device_register(ep_list);
-    esp_zb_core_action_handler_register(zb_action_handler);
 
     esp_zb_set_primary_network_channel_set(ESP_ZB_PRIMARY_CHANNEL_MASK);
     ESP_ERROR_CHECK(esp_zb_start(false));
@@ -562,7 +498,7 @@ void app_main(void)
     };
     ESP_ERROR_CHECK(esp_zb_platform_config(&config));
 
-    xTaskCreate(esp_zb_task, "ZB_main", 8192, NULL, 5, NULL);
-
+    xTaskCreate(esp_zb_task, "ZB_main", 8192, NULL, 5, NULL);        
+    
     ESP_LOGI(TAG, "Ready.");
 }
