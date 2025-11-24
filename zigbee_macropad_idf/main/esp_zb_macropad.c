@@ -41,7 +41,7 @@ static const gpio_num_t BTN_PINS[BTN_COUNT] = {
 #define BTN_POLL_INTERVAL_MS   10
 #define DEBOUNCE_MS        30
 #define DOUBLE_CLICK_MS   400
-#define LONG_PRESS_MS    1000
+#define HOLD_PRESS_MS    1000
 
 /* --- Endpoint and clusters -------------------------------------- */
 #define MACROPAD_ENDPOINT            0x01
@@ -61,7 +61,7 @@ typedef struct {
     uint64_t last_change_us;
     uint64_t press_start_us;
     uint64_t last_release_us;
-    bool long_fired;
+    bool hold_fired;
 } btn_state_t;
 
 typedef struct {
@@ -88,7 +88,7 @@ static uint8_t g_feedback_level = 80;
 static inline uint64_t now_us(void) { return esp_timer_get_time(); }
 static inline uint32_t us_to_ms(uint64_t us) { return (uint32_t)(us / 1000ULL); }
 
-typedef enum { ACT_NONE, ACT_SINGLE, ACT_DOUBLE, ACT_LONG } action_t;
+typedef enum { ACT_NONE, ACT_SINGLE, ACT_DOUBLE, ACT_HOLD } action_t;
 
 /* --- Forward declarations  ------------------------------------------------------ */
 static const char* action_str(action_t a);
@@ -102,7 +102,7 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
 static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id, const void *message);
 
 /* Public helper to send a button event (call this from your key matrix code) */
-void macropad_send_button_event(uint8_t button_id, uint8_t action);
+void macropad_send_button_event(uint8_t button_id, action_t action);
 
 /* ======================================================================= */
 /*                          BLINKER (ZB CONTEXT)                           */
@@ -203,7 +203,7 @@ static void boot_button_task(void *arg) {
 /*                     LOCAL FEEDBACK (color fixed)                         */
 /* ======================================================================= */
 static const char* action_str(action_t a) {
-    return (a==ACT_SINGLE) ? "single" : (a==ACT_DOUBLE) ? "double" : "long";
+    return (a==ACT_SINGLE) ? "single" : (a==ACT_DOUBLE) ? "double" : "hold";
 }
 
 static void flash_action(action_t a, uint8_t brightness) {
@@ -214,7 +214,7 @@ static void flash_action(action_t a, uint8_t brightness) {
     switch(a){
         case ACT_SINGLE: light_driver_set_color_xy(0x4ccd, 0x9999);break;  // green
         case ACT_DOUBLE: light_driver_set_color_xy(0x2666, 0x0f5c);break;  // blue
-        case ACT_LONG: light_driver_set_color_xy(0x6b58, 0x8157);break;  // yellow
+        case ACT_HOLD: light_driver_set_color_xy(0x6b58, 0x8157);break;  // yellow
         default: break;
     }
     light_driver_set_power(true);
@@ -226,7 +226,7 @@ static void flash_action(action_t a, uint8_t brightness) {
 static void on_button_action(uint8_t index, action_t act) {
     ESP_LOGI(TAG, "Button %u -> %s (feedback=%u)", (unsigned)index+1, action_str(act), (unsigned)g_feedback_level);
     flash_action(act, g_feedback_level);
-    macropad_send_button_event(index, 0);  // 0 = single press
+    macropad_send_button_event(index, act);
 }
 
 /* ======================================================================= */
@@ -236,7 +236,7 @@ static void button_task(void *arg)
 {
     const uint64_t debounce_us      = DEBOUNCE_MS * 1000ULL;
     const uint64_t double_click_us  = DOUBLE_CLICK_MS * 1000ULL;
-    const uint64_t long_press_us    = LONG_PRESS_MS * 1000ULL;
+    const uint64_t long_press_us    = HOLD_PRESS_MS * 1000ULL;
 
     while (true) {
         uint64_t now = esp_timer_get_time();
@@ -254,10 +254,10 @@ static void button_task(void *arg)
                 if (b->stable) {
                     // pressed
                     b->press_start_us = now;
-                    b->long_fired = false;
+                    b->hold_fired = false;
                 } else {
                     // released
-                    if (!b->long_fired) {
+                    if (!b->hold_fired) {
                         if (b->last_release_us &&
                             (now - b->last_release_us < double_click_us)) {
                             on_button_action(i, ACT_DOUBLE);
@@ -270,10 +270,10 @@ static void button_task(void *arg)
             }
 
             // long press detection
-            if (b->stable && !b->long_fired &&
+            if (b->stable && !b->hold_fired &&
                 now - b->press_start_us > long_press_us) {
-                b->long_fired = true;
-                on_button_action(i, ACT_LONG);
+                b->hold_fired = true;
+                on_button_action(i, ACT_HOLD);
                 b->last_release_us = 0;
             }
 
@@ -289,14 +289,12 @@ static void button_task(void *arg)
     }
 }
 
-void macropad_send_button_event(uint8_t button_id, uint8_t action)
+void macropad_send_button_event(uint8_t button_id, action_t action)
 {
-    /* 2-byte payload: [button_id, action] */
-    uint8_t payload[2] = { button_id, action };
+    uint8_t payload[2] = { button_id, (uint8_t)action};
 
     esp_zb_zcl_custom_cluster_cmd_req_t req = {0};
 
-    /* Send to coordinator (short address 0x0000) */
     req.zcl_basic_cmd.dst_addr_u.addr_short = 0x0000;  // coordinator
     req.zcl_basic_cmd.dst_endpoint          = MACROPAD_ENDPOINT;
     req.zcl_basic_cmd.src_endpoint          = MACROPAD_ENDPOINT;
@@ -307,7 +305,7 @@ void macropad_send_button_event(uint8_t button_id, uint8_t action)
     req.direction    = ESP_ZB_ZCL_CMD_DIRECTION_TO_SRV;
     req.custom_cmd_id = MACROPAD_CMD_BUTTON_EVENT;
 
-    req.data.type  = ESP_ZB_ZCL_ATTR_TYPE_U8;   // raw bytes, interpreted by Z2M
+    req.data.type  = ESP_ZB_ZCL_ATTR_TYPE_SET;
     req.data.size  = sizeof(payload);
     req.data.value = payload;
 
@@ -315,10 +313,9 @@ void macropad_send_button_event(uint8_t button_id, uint8_t action)
     esp_zb_zcl_custom_cluster_cmd_req(&req);
     esp_zb_lock_release();
 
-    ESP_EARLY_LOGI(TAG,
-                   "Sent button event: button=%u action=%u",
-                   button_id, action);
+    ESP_EARLY_LOGI(TAG, "Sent button event: button=%u action=%u", button_id, action);
 }
+
 
 
 /* ======================================================================= */

@@ -35,13 +35,14 @@ const fzLocal = {
             }
 
             // From logs:
-            // [x, x, 0, 15]
+            // [x, x, 0, 15, 1]
             const buttonId = raw[3];
-            const actionType = raw[2] ?? 0;
+            const actionType = raw[4] ?? 0;
 
-            let actionStr = 'single';
-            if (actionType === 1) actionStr = 'double';
-            else if (actionType === 2) actionStr = 'hold';
+            let actionStr = 'default';
+            if (actionType === 1) actionStr = 'single';
+            else if (actionType === 2) actionStr = 'double';
+			else if (actionType === 3) actionStr = 'hold';
 
             const action = `button_${buttonId}_${actionStr}`;
 
