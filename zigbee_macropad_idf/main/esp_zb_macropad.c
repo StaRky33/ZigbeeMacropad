@@ -28,13 +28,18 @@
 #define TAG                 "MACROPAD"
 
 /* --- PINS --------------------------------------------------------------- */
-#define BTN_COUNT 16
-static const gpio_num_t BTN_PINS[BTN_COUNT] = {
-    GPIO_NUM_1,  GPIO_NUM_2,  GPIO_NUM_3,  GPIO_NUM_4,
-    GPIO_NUM_5,  GPIO_NUM_6,  GPIO_NUM_7,  GPIO_NUM_10,
-    GPIO_NUM_11, GPIO_NUM_12, GPIO_NUM_13, GPIO_NUM_18,
-    GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_21, GPIO_NUM_22
+#define ROWS 4
+#define COLS 4
+#define BTN_COUNT (ROWS * COLS)
+
+static const gpio_num_t ROW_PINS[ROWS] = {
+    GPIO_NUM_2, GPIO_NUM_3, GPIO_NUM_4, GPIO_NUM_5,
 };
+
+static const gpio_num_t COL_PINS[COLS] = {
+    GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_21, GPIO_NUM_22,
+};
+
 #define BOOT_BUTTON_GPIO     GPIO_NUM_9
 
 /* --- Timing (ms) for local keypad -------------------------------------- */
@@ -103,6 +108,37 @@ static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id,
 
 /* Public helper to send a button event (call this from your key matrix code) */
 void macropad_send_button_event(uint8_t button_id, action_t action);
+
+/* ======================================================================= */
+/*                          INIT GPIO                                      */
+/* ======================================================================= */
+static void matrix_gpio_init(void)
+{
+    // Rows: inputs with pull-up
+    for (int r = 0; r < ROWS; ++r) {
+        gpio_config_t io_conf = {
+            .pin_bit_mask = 1ULL << ROW_PINS[r],
+            .mode = GPIO_MODE_INPUT,
+            .pull_up_en = GPIO_PULLUP_ENABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        gpio_config(&io_conf);
+    }
+
+    // Columns: outputs, start HIGH
+    for (int c = 0; c < COLS; ++c) {
+        gpio_config_t io_conf = {
+            .pin_bit_mask = 1ULL << COL_PINS[c],
+            .mode = GPIO_MODE_OUTPUT,
+            .pull_up_en = GPIO_PULLUP_DISABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        gpio_config(&io_conf);
+        gpio_set_level(COL_PINS[c], 1); // idle high
+    }
+}
 
 /* ======================================================================= */
 /*                          BLINKER (ZB CONTEXT)                           */
@@ -200,7 +236,7 @@ static void boot_button_task(void *arg) {
 }
 
 /* ======================================================================= */
-/*                     LOCAL FEEDBACK (color fixed)                         */
+/*                     LOCAL FEEDBACK (color fixed)                        */
 /* ======================================================================= */
 static const char* action_str(action_t a) {
     return (a==ACT_SINGLE) ? "single" : (a==ACT_DOUBLE) ? "double" : "hold";
@@ -230,19 +266,60 @@ static void on_button_action(uint8_t index, action_t act) {
 }
 
 /* ======================================================================= */
-/*                        BUTTON SCANNER TASK                               */
+/*                        BUTTONS TASK                                     */
 /* ======================================================================= */
+// Fill raw_states[BTN_COUNT] with true if pressed, false otherwise
+static void matrix_scan(bool raw_states[BTN_COUNT])
+{
+    // Clear all
+    for (int i = 0; i < BTN_COUNT; ++i) {
+        raw_states[i] = false;
+    }
+
+    for (int c = 0; c < COLS; ++c) {
+        // Set all columns HIGH
+        for (int cc = 0; cc < COLS; ++cc) {
+            gpio_set_level(COL_PINS[cc], 1);
+        }
+
+        // Drive current column LOW (active)
+        gpio_set_level(COL_PINS[c], 0);
+
+        // Small settle delay (a few microseconds is enough)
+        esp_rom_delay_us(5);
+
+        for (int r = 0; r < ROWS; ++r) {
+            int level = gpio_get_level(ROW_PINS[r]); // 0 = pressed (active low)
+            bool pressed = (level == 0);
+
+            int idx = r * COLS + c;  // mapping row/col -> button index
+            raw_states[idx] = pressed;
+        }
+    }
+
+    // Return columns to idle HIGH (optional but nice)
+    for (int c = 0; c < COLS; ++c) {
+        gpio_set_level(COL_PINS[c], 1);
+    }
+}
+
 static void button_task(void *arg)
 {
     const uint64_t debounce_us      = DEBOUNCE_MS * 1000ULL;
     const uint64_t double_click_us  = DOUBLE_CLICK_MS * 1000ULL;
     const uint64_t long_press_us    = HOLD_PRESS_MS * 1000ULL;
 
+    bool raw_states[BTN_COUNT];
+
     while (true) {
         uint64_t now = esp_timer_get_time();
 
+        // 1. Scan whole matrix once -> raw_states[]
+        matrix_scan(raw_states);
+
+        // 2. Run your existing state machine per logical button
         for (int i = 0; i < BTN_COUNT; ++i) {
-            bool raw = (gpio_get_level(BTN_PINS[i]) == 0);  // active low
+            bool raw = raw_states[i];    // <- instead of reading GPIO directly
             btn_state_t *b = &g_btn[i];
 
             // Debounce transition
@@ -288,35 +365,6 @@ static void button_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(BTN_POLL_INTERVAL_MS));
     }
 }
-
-void macropad_send_button_event(uint8_t button_id, action_t action)
-{
-    uint8_t payload[2] = { button_id, (uint8_t)action};
-
-    esp_zb_zcl_custom_cluster_cmd_req_t req = {0};
-
-    req.zcl_basic_cmd.dst_addr_u.addr_short = 0x0000;  // coordinator
-    req.zcl_basic_cmd.dst_endpoint          = MACROPAD_ENDPOINT;
-    req.zcl_basic_cmd.src_endpoint          = MACROPAD_ENDPOINT;
-
-    req.address_mode = ESP_ZB_APS_ADDR_MODE_16_ENDP_PRESENT;
-    req.cluster_id   = MACROPAD_CLUSTER_ID;
-    req.profile_id   = ESP_ZB_AF_HA_PROFILE_ID;
-    req.direction    = ESP_ZB_ZCL_CMD_DIRECTION_TO_SRV;
-    req.custom_cmd_id = MACROPAD_CMD_BUTTON_EVENT;
-
-    req.data.type  = ESP_ZB_ZCL_ATTR_TYPE_SET;
-    req.data.size  = sizeof(payload);
-    req.data.value = payload;
-
-    esp_zb_lock_acquire(portMAX_DELAY);
-    esp_zb_zcl_custom_cluster_cmd_req(&req);
-    esp_zb_lock_release();
-
-    ESP_EARLY_LOGI(TAG, "Sent button event: button=%u action=%u", button_id, action);
-}
-
-
 
 /* ======================================================================= */
 /*                  DEFERRED LIGHT DRIVER INITIALIZATION                   */
@@ -563,26 +611,40 @@ static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id,
     return ret;
 }
 
+void macropad_send_button_event(uint8_t button_id, action_t action)
+{
+    uint8_t payload[2] = { button_id, (uint8_t)action};
+
+    esp_zb_zcl_custom_cluster_cmd_req_t req = {0};
+
+    req.zcl_basic_cmd.dst_addr_u.addr_short = 0x0000;  // coordinator
+    req.zcl_basic_cmd.dst_endpoint          = MACROPAD_ENDPOINT;
+    req.zcl_basic_cmd.src_endpoint          = MACROPAD_ENDPOINT;
+
+    req.address_mode = ESP_ZB_APS_ADDR_MODE_16_ENDP_PRESENT;
+    req.cluster_id   = MACROPAD_CLUSTER_ID;
+    req.profile_id   = ESP_ZB_AF_HA_PROFILE_ID;
+    req.direction    = ESP_ZB_ZCL_CMD_DIRECTION_TO_SRV;
+    req.custom_cmd_id = MACROPAD_CMD_BUTTON_EVENT;
+
+    req.data.type  = ESP_ZB_ZCL_ATTR_TYPE_SET;
+    req.data.size  = sizeof(payload);
+    req.data.value = payload;
+
+    esp_zb_lock_acquire(portMAX_DELAY);
+    esp_zb_zcl_custom_cluster_cmd_req(&req);
+    esp_zb_lock_release();
+
+    ESP_EARLY_LOGI(TAG, "Sent button event: button=%u action=%u", button_id, action);
+}
+
 /* ======================================================================= */
 /*                                MAIN                                     */
 /* ======================================================================= */
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Starting 16-button macropad + Zigbee color light");
-
-    // --- Configure 16 button inputs ---
-    gpio_config_t io = {
-        .pin_bit_mask = 0,
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_ANYEDGE  // trigger on both press/release
-    };
-    for (int i = 0; i < BTN_COUNT; ++i) {
-        io.pin_bit_mask |= 1ULL << BTN_PINS[i];
-    }
-    ESP_ERROR_CHECK(gpio_config(&io));
-
+    ESP_LOGI(TAG, "Starting 16-button macropad");
+    
     // --- Configure BOOT button input ---
     gpio_config_t btnio = {
         .pin_bit_mask = 1ULL << BOOT_BUTTON_GPIO,
@@ -600,15 +662,7 @@ void app_main(void)
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     gpio_isr_handler_add(BOOT_BUTTON_GPIO, boot_button_isr, NULL);
 
-    // --- Init button states ---
-    memset(g_btn, 0, sizeof(g_btn));
-    uint64_t t0 = now_us();
-    for (int i = 0; i < BTN_COUNT; ++i) {
-        g_btn[i].raw = (gpio_get_level(BTN_PINS[i]) == 0);
-        g_btn[i].stable = g_btn[i].raw;
-        g_btn[i].prev_stable = g_btn[i].raw;
-        g_btn[i].last_change_us = t0;
-    }
+    matrix_gpio_init();
 
     // --- Launch tasks ---
     xTaskCreate(button_task, "button_task", 4096, NULL, 1, NULL);
