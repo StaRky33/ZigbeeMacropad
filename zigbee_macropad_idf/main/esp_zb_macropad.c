@@ -32,11 +32,11 @@
 #define COLS 4
 #define BTN_COUNT (ROWS * COLS)
 
-static const gpio_num_t ROW_PINS[ROWS] = {
+static const gpio_num_t COL_PINS[ROWS] = {
     GPIO_NUM_2, GPIO_NUM_3, GPIO_NUM_4, GPIO_NUM_5,
 };
 
-static const gpio_num_t COL_PINS[COLS] = {
+static const gpio_num_t ROW_PINS[COLS] = {
     GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_21, GPIO_NUM_22,
 };
 
