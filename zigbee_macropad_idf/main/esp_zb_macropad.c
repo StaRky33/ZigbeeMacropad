@@ -44,8 +44,14 @@ static const gpio_num_t BTN_PINS[BTN_COUNT] = {
 #define LONG_PRESS_MS    1000
 
 /* --- Endpoint and clusters -------------------------------------- */
-#define CUSTOM_CLUSTER_ID        0xFC00    // arbitrary manufacturer-specific range
-#define CONFIG_ENDPOINT     10
+#define MACROPAD_ENDPOINT            0x01
+
+/* Custom cluster used to report button events to Z2M */
+#define MACROPAD_CLUSTER_ID          0xFC00
+#define MACROPAD_CMD_BUTTON_EVENT    0x00
+
+/* Use all channels or restrict as you like */
+#define ESP_ZB_PRIMARY_CHANNEL_MASK  ESP_ZB_TRANSCEIVER_ALL_CHANNELS_MASK
 
 /* --- Button state machine ----------------------------------------------- */
 typedef struct {
@@ -90,6 +96,13 @@ static void flash_action(action_t a, uint8_t brightness);
 static void start_network_steering(uint8_t param);
 static void zb_blink_step(void);
 static void zb_reset_and_steer_cb(void);
+
+/* Prototypes */
+static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t *message);
+static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id, const void *message);
+
+/* Public helper to send a button event (call this from your key matrix code) */
+void macropad_send_button_event(uint8_t button_id, uint8_t action);
 
 /* ======================================================================= */
 /*                          BLINKER (ZB CONTEXT)                           */
@@ -213,6 +226,7 @@ static void flash_action(action_t a, uint8_t brightness) {
 static void on_button_action(uint8_t index, action_t act) {
     ESP_LOGI(TAG, "Button %u -> %s (feedback=%u)", (unsigned)index+1, action_str(act), (unsigned)g_feedback_level);
     flash_action(act, g_feedback_level);
+    macropad_send_button_event(index, 0);  // 0 = single press
 }
 
 /* ======================================================================= */
@@ -274,6 +288,38 @@ static void button_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(BTN_POLL_INTERVAL_MS));
     }
 }
+
+void macropad_send_button_event(uint8_t button_id, uint8_t action)
+{
+    /* 2-byte payload: [button_id, action] */
+    uint8_t payload[2] = { button_id, action };
+
+    esp_zb_zcl_custom_cluster_cmd_req_t req = {0};
+
+    /* Send to coordinator (short address 0x0000) */
+    req.zcl_basic_cmd.dst_addr_u.addr_short = 0x0000;  // coordinator
+    req.zcl_basic_cmd.dst_endpoint          = MACROPAD_ENDPOINT;
+    req.zcl_basic_cmd.src_endpoint          = MACROPAD_ENDPOINT;
+
+    req.address_mode = ESP_ZB_APS_ADDR_MODE_16_ENDP_PRESENT;
+    req.cluster_id   = MACROPAD_CLUSTER_ID;
+    req.profile_id   = ESP_ZB_AF_HA_PROFILE_ID;
+    req.direction    = ESP_ZB_ZCL_CMD_DIRECTION_TO_SRV;
+    req.custom_cmd_id = MACROPAD_CMD_BUTTON_EVENT;
+
+    req.data.type  = ESP_ZB_ZCL_ATTR_TYPE_U8;   // raw bytes, interpreted by Z2M
+    req.data.size  = sizeof(payload);
+    req.data.value = payload;
+
+    esp_zb_lock_acquire(portMAX_DELAY);
+    esp_zb_zcl_custom_cluster_cmd_req(&req);
+    esp_zb_lock_release();
+
+    ESP_EARLY_LOGI(TAG,
+                   "Sent button event: button=%u action=%u",
+                   button_id, action);
+}
+
 
 /* ======================================================================= */
 /*                  DEFERRED LIGHT DRIVER INITIALIZATION                   */
@@ -399,7 +445,14 @@ static void esp_zb_task(void *pv)
     esp_zb_attribute_list_t *identify_cluster = esp_zb_identify_cluster_create(&identify_cfg);
 
     /*---------------------------------------------------------------
-     * CLUSTER LIST (Basic + Identify)
+     * CUSTOM MACROPAD CLUSTER 
+     *-------------------------------------------------------------*/
+    esp_zb_attribute_list_t *macropad_cluster =
+    esp_zb_zcl_attr_list_create(MACROPAD_CLUSTER_ID);
+
+
+    /*---------------------------------------------------------------
+     * CLUSTER LIST (Basic + Identify + Macropad)
      *-------------------------------------------------------------*/
     esp_zb_cluster_list_t *cluster_list = esp_zb_zcl_cluster_list_create();
     ESP_ERROR_CHECK(cluster_list ? ESP_OK : ESP_FAIL);
@@ -412,14 +465,18 @@ static void esp_zb_task(void *pv)
                                                              identify_cluster,
                                                              ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
 
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_custom_cluster( cluster_list,
+                                                            macropad_cluster,
+                                                            ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE));
+
     /*---------------------------------------------------------------
      * ENDPOINT CONFIGURATION
      *-------------------------------------------------------------*/
     esp_zb_endpoint_config_t ep_cfg = {
-        .endpoint           = CONFIG_ENDPOINT,               // typically 10
+        .endpoint           = MACROPAD_ENDPOINT,
         .app_profile_id     = ESP_ZB_AF_HA_PROFILE_ID,
-        .app_device_id      = ESP_ZB_HA_DIMMABLE_LIGHT_DEVICE_ID,
-        .app_device_version = 1,
+        .app_device_id      = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID,
+        .app_device_version = 0,
     };
 
     esp_zb_ep_list_t *ep_list = esp_zb_ep_list_create();
@@ -431,11 +488,82 @@ static void esp_zb_task(void *pv)
      *-------------------------------------------------------------*/
     esp_zb_device_register(ep_list);
 
+    /* 3. Register Zigbee core action handler (for attribute writes, custom commands, etc.) */
+    esp_zb_core_action_handler_register(zb_action_handler);
+    
     esp_zb_set_primary_network_channel_set(ESP_ZB_PRIMARY_CHANNEL_MASK);
     ESP_ERROR_CHECK(esp_zb_start(false));
 
+    
+
     g_zb_ready = true;
     esp_zb_stack_main_loop();
+}
+
+/* ======================================================================= */
+/*                       ZIGBEE ATTRIUBUTE HANDLER                         */
+/* ======================================================================= */
+static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t *message)
+{
+    ESP_RETURN_ON_FALSE(message, ESP_FAIL, TAG, "Empty ZCL set_attr message");
+
+    if (message->info.status != ESP_ZB_ZCL_STATUS_SUCCESS) {
+        ESP_LOGE(TAG, "set_attr: error status=%d", message->info.status);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t  endpoint   = message->info.dst_endpoint;
+    uint16_t cluster_id = message->info.cluster;
+    uint16_t attr_id    = message->attribute.id;
+
+    ESP_LOGI(TAG,
+             "set_attr: ep=%u cluster=0x%04X attr=0x%04X size=%d",
+             endpoint,
+             cluster_id,
+             attr_id,
+             message->attribute.data.size);
+
+    switch (cluster_id) {
+    case ESP_ZB_ZCL_CLUSTER_ID_BASIC:
+        /* Handle writes to Basic cluster if needed (e.g. IdentifyTime) */
+        break;
+
+    case MACROPAD_CLUSTER_ID:
+        /* If you add config attributes (e.g. per-key mode) to your macropad cluster,
+         * decode them here from message->attribute.data.value
+         */
+        break;
+
+    default:
+        /* Unknown or unhandled cluster */
+        break;
+    }
+
+    return ESP_OK;
+}
+
+static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id,
+                                   const void *message)
+{
+    esp_err_t ret = ESP_OK;
+
+    switch (callback_id) {
+    case ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID:
+        ret = zb_attribute_handler(
+            (const esp_zb_zcl_set_attr_value_message_t *)message);
+        break;
+
+    /* You can add more cases later:
+     *  - ESP_ZB_CORE_REPORT_ATTR_CB_ID
+     *  - ESP_ZB_CORE_CMD_CUSTOM_CLUSTER_REQ_CB_ID
+     *  etc.
+     */
+    default:
+        ESP_LOGW(TAG, "Unhandled Zigbee action 0x%x", callback_id);
+        break;
+    }
+
+    return ret;
 }
 
 /* ======================================================================= */
