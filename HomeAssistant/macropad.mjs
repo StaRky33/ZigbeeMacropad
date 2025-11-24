@@ -34,17 +34,9 @@ const fzLocal = {
                 return {};
             }
 
-            // From your logs:
-            // [1, 4, 0, 15]
-            // [1, 5, 0, 15]
-            // [1, 6, 0, 15]
-            // [1, 7, 0, 12]
-            // [1, 8, 0, 13]
-            //
-            // We'll treat:
-            //   raw[1] = button id
-            //   raw[2] = action type (currently 0 in your logs)
-            const buttonId = raw[1];
+            // From logs:
+            // [x, x, 0, 15]
+            const buttonId = raw[3];
             const actionType = raw[2] ?? 0;
 
             let actionStr = 'single';
@@ -76,7 +68,6 @@ export default {
     ],
     toZigbee: [],
     exposes: [
-        // Pre-declare actions (keep this exactly as you had it)
         e.action([
             'button_0_single', 'button_1_single', 'button_2_single', 'button_3_single',
             'button_4_single', 'button_5_single', 'button_6_single', 'button_7_single',
