@@ -13,13 +13,15 @@
 #include "esp_zb_macropad.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
+#include "esp_timer.h"
+#include "ha/esp_zigbee_ha_standard.h"
 #include "nvs_flash.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-#include "ha/esp_zigbee_ha_standard.h"
-#include "esp_timer.h"
+
 
 #if !defined CONFIG_ZB_ZCZR
 #error Define ZB_ZCZR in idf.py menuconfig to compile light (Router) source code.
@@ -41,6 +43,12 @@ static const gpio_num_t COL_PINS[COLS] = {
 };
 
 #define BOOT_BUTTON_GPIO     GPIO_NUM_9
+
+/* --- Deep sleep variables -------------------------------------- */
+#define INACTIVITY_SLEEP_MS   (20 * 1000)        // 1 minute --> 20sec test
+#define INACTIVITY_SLEEP_US   (INACTIVITY_SLEEP_MS * 1000ULL)
+
+static uint64_t g_last_activity_us = 0;
 
 /* --- Timing (ms) for local keypad -------------------------------------- */
 #define BTN_POLL_INTERVAL_MS   10
@@ -138,6 +146,79 @@ static void matrix_gpio_init(void)
         gpio_config(&io_conf);
         gpio_set_level(COL_PINS[c], 1); // idle high
     }
+}
+
+/* ======================================================================= */
+/*                          SLEEP                                          */
+/* ======================================================================= */
+static uint64_t build_row_wakeup_mask(void)
+{
+    uint64_t mask = 0;
+
+    for (int r = 0; r < ROWS; ++r) {
+        gpio_num_t gpio = ROW_PINS[r];
+
+        // Optional sanity check: make sure this pin *can* be used for wake
+        if (!esp_sleep_is_valid_wakeup_gpio(gpio)) {
+            ESP_LOGE(TAG, "GPIO %d is not a valid deep sleep wake pin!", gpio);
+        }
+        mask |= (1ULL << gpio);  // BIT(gpio)
+    }
+
+    return mask;
+}
+
+void macropad_enter_deep_sleep(void)
+{
+    ESP_LOGI(TAG, "Preparing to enter deep sleep...");
+
+    // 1) Columns: outputs LOW so any pressed key can pull rows LOW via diodes
+    for (int c = 0; c < COLS; ++c) {
+        gpio_config_t col_conf = {
+            .pin_bit_mask = 1ULL << COL_PINS[c],
+            .mode = GPIO_MODE_OUTPUT,
+            .pull_up_en = GPIO_PULLUP_DISABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        gpio_config(&col_conf);
+
+        gpio_set_level(COL_PINS[c], 0);   // keep column LOW in deep sleep
+
+        // Optional: hold this level through deep sleep
+        gpio_hold_en(COL_PINS[c]);
+    }
+
+    // 2) Rows: inputs (no interrupts), we'll rely on wakeup logic instead
+    for (int r = 0; r < ROWS; ++r) {
+        gpio_config_t row_conf = {
+            .pin_bit_mask = 1ULL << ROW_PINS[r],
+            .mode = GPIO_MODE_INPUT,
+            .pull_up_en = GPIO_PULLUP_ENABLE,    // keep them HIGH when idle
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        gpio_config(&row_conf);
+    }
+
+    // 3) Enable deep sleep wake on rows, triggered when they go LOW
+    uint64_t wake_mask = build_row_wakeup_mask();
+
+    esp_err_t err = esp_deep_sleep_enable_gpio_wakeup(
+        wake_mask,
+        ESP_GPIO_WAKEUP_GPIO_LOW     // wake when any selected GPIO turns LOW
+    );
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to enable GPIO wakeup (err=0x%x)", err);
+    }
+
+    ESP_LOGI(TAG, "Entering deep sleep, wake mask=0x%llx", (unsigned long long)wake_mask);
+
+    // Optional: log flush
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    esp_deep_sleep_start();
+    // never returns
 }
 
 /* ======================================================================= */
@@ -260,7 +341,7 @@ static void flash_action(action_t a, uint8_t brightness) {
 }
 
 static void on_button_action(uint8_t index, action_t act) {
-    ESP_LOGI(TAG, "Button %u -> %s (feedback=%u)", (unsigned)index+1, action_str(act), (unsigned)g_feedback_level);
+    ESP_LOGI(TAG, "Button %u -> %s (feedback=%u)", (unsigned)index, action_str(act), (unsigned)g_feedback_level);
     flash_action(act, g_feedback_level);
     macropad_send_button_event(index, act);
 }
@@ -312,7 +393,7 @@ static void button_task(void *arg)
     bool raw_states[BTN_COUNT];
 
     while (true) {
-        uint64_t now = esp_timer_get_time();
+        uint64_t now = now_us();
 
         // 1. Scan whole matrix once -> raw_states[]
         matrix_scan(raw_states);
@@ -338,6 +419,7 @@ static void button_task(void *arg)
                         if (b->last_release_us &&
                             (now - b->last_release_us < double_click_us)) {
                             on_button_action(i, ACT_DOUBLE);
+                            g_last_activity_us = now;
                             b->last_release_us = 0;
                         } else {
                             b->last_release_us = now;
@@ -351,6 +433,7 @@ static void button_task(void *arg)
                 now - b->press_start_us > long_press_us) {
                 b->hold_fired = true;
                 on_button_action(i, ACT_HOLD);
+                g_last_activity_us = now;
                 b->last_release_us = 0;
             }
 
@@ -358,8 +441,16 @@ static void button_task(void *arg)
             if (!b->stable && b->last_release_us &&
                 now - b->last_release_us > double_click_us) {
                 on_button_action(i, ACT_SINGLE);
+                g_last_activity_us = now;
                 b->last_release_us = 0;
             }
+        }
+        // 🔹 Inactivity check here
+        if (now - g_last_activity_us > INACTIVITY_SLEEP_US) {
+            ESP_LOGI(TAG, "No activity for %llu us, entering deep sleep",
+                     (unsigned long long)(now - g_last_activity_us));
+            macropad_enter_deep_sleep();
+            // esp_deep_sleep_start() does not return
         }
 
         vTaskDelay(pdMS_TO_TICKS(BTN_POLL_INTERVAL_MS));
@@ -643,6 +734,23 @@ void macropad_send_button_event(uint8_t button_id, action_t action)
 /* ======================================================================= */
 void app_main(void)
 {
+    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+
+    if (cause == ESP_SLEEP_WAKEUP_GPIO) {
+        uint64_t status = esp_sleep_get_gpio_wakeup_status();
+        ESP_LOGI(TAG, "Woke from deep sleep via GPIO, status=0x%llx",
+                 (unsigned long long)status);
+        // status bits match GPIO numbers; you can inspect which row woke it
+    } else {
+        ESP_LOGI(TAG, "Cold boot (cause=%d)", cause);
+    }
+
+    // Clear holds so we can reconfigure pins
+    for (int c = 0; c < COLS; ++c) {
+        gpio_hold_dis(COL_PINS[c]);
+    }
+
+
     ESP_LOGI(TAG, "Starting 16-button macropad");
     
     // --- Configure BOOT button input ---
@@ -663,6 +771,8 @@ void app_main(void)
     gpio_isr_handler_add(BOOT_BUTTON_GPIO, boot_button_isr, NULL);
 
     matrix_gpio_init();
+
+    g_last_activity_us = now_us();
 
     // --- Launch tasks ---
     xTaskCreate(button_task, "button_task", 4096, NULL, 1, NULL);
