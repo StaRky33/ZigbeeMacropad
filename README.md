@@ -55,6 +55,10 @@ Development began in **Arduino IDE**, later migrated to **VS Code with ESP-IDF v
 
 ---
 
+## 🗺️ Circuit Schematic
+![Circuit Schematics](Pictures/circuitSchematics.png)
+---
+
 ## 🧰 Build Instructions
 
 ### 🪛 1. Print and Prepare the Case
@@ -91,12 +95,16 @@ Development began in **Arduino IDE**, later migrated to **VS Code with ESP-IDF v
    idf.py flash monitor
 The device will start blinking red to indicate Zigbee pairing mode.
 
+---
+
 ## 🔗 Pair with Home Assistant
 
 In Home Assistant, open Settings → Devices & Services → Zigbee2MQTT → Permit join.
 Power on the macropad — it will appear as a Dimmable Light.
 Adjust the brightness slider to set LED feedback intensity.
 Test button clicks (single, double, long) — LED flashes will reflect the configured brightness.
+
+---
 
 ## ✨ Features Summary
 
@@ -107,10 +115,14 @@ Test button clicks (single, double, long) — LED flashes will reflect the confi
 🧱 Modular, 3D-printed enclosure with magnets and inserts
 🪫 Battery powered with on/off switch
 
+---
+
 ## 🧾 License
 
 This project is released under the MIT License.
 Remixed 3D models remain under their respective creator licenses (see linked Printables pages).
+
+---
 
 ## 📸 Gallery
 
