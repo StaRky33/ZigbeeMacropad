@@ -77,10 +77,11 @@ Development began in **Arduino IDE**, later migrated to **VS Code with ESP-IDF v
 ### 🔋 3. Wiring Overview
 | Connection | Description |
 |-------------|-------------|
-| **GPIO 1–22** | Key matrix or direct inputs for 16 buttons. Connect to one side of every switch and the other to GND. |
-| **GPIO 9** | BOOT / Reset button. Connect to one side of the 6mm button and the other to GND. |
+| **GPIO 2,3,4,5 and 18,19,20,21** | Follow the wiring diagram.|
+| **GPIO 9** | BOOT / Reset button. Connect to one side of the 6mm button and the other to any GND. |
 | **3.3 V & GND** | Power rails for ESP32-C6 and key pull-ups. |
-| **Battery pack** | 3 x 1.5 V Li-ion cell inline. Minus to GND and Plus to 5V (reach 4.5V with no cutout and goes to 0 when empty). |
+| **Battery pack** | 3 x 1.5 V Li-ion cell inline. Minus to Vin- and Plus to Vin+ of MT3608 (reach 4.5V with no cutout and goes to 0 when empty). |
+| **MT3608** | Vin+ and Vin- to battery.Vout+ and Vout- to 3.3V and GND on ESP32 |
 | **On/Off switch** | Inline with battery lead. |
 
 > 💡 Use internal pull-ups on all button pins; connect switches to **GND**.
@@ -99,10 +100,10 @@ The device will start blinking red to indicate Zigbee pairing mode.
 
 ## 🔗 Pair with Home Assistant
 
+Add macropad.mjs file to config/zigbee2mqtt/external_converters (if folder does not exist create it).
 In Home Assistant, open Settings → Devices & Services → Zigbee2MQTT → Permit join.
-Power on the macropad — it will appear as a Dimmable Light.
-Adjust the brightness slider to set LED feedback intensity.
-Test button clicks (single, double, long) — LED flashes will reflect the configured brightness.
+Test button clicks (single, double, hold) — LED flashes will reflect the button type.
+You can now create an automation based on the button clicks.
 
 ---
 
