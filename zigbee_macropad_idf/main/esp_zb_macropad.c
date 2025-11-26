@@ -11,6 +11,7 @@
 #include "esp_timer.h"
 #include "ha/esp_zigbee_ha_standard.h"
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -60,6 +61,7 @@ static uint64_t g_last_activity_us = 0;
 #define MACROPAD_CLUSTER_ID          0xFC00
 #define MACROPAD_CMD_BUTTON_EVENT    0x00
 
+#define MACROPAD_ATTR_BRIGHTNESS_ID    0x0A00
 /* Use all channels or restrict as you like */
 #define ESP_ZB_PRIMARY_CHANNEL_MASK  ESP_ZB_TRANSCEIVER_ALL_CHANNELS_MASK
 
@@ -91,8 +93,8 @@ static bool g_driver_ready  = false;
 static bool g_blink_on      = false;
 static bool g_zb_ready      = false;
 
-/* Brightness (0..254 from Zigbee Level Control); used for key feedback */
-static uint8_t g_feedback_level = 80;
+/* Brightness (0..100 from Zigbee); used for key feedback */
+static uint8_t g_brightness = 100;
 
 /* --- Helpers ------------------------------------------------------------ */
 static inline uint64_t now_us(void) { return esp_timer_get_time(); }
@@ -162,6 +164,18 @@ static uint64_t build_row_wakeup_mask(void)
     }
 
     return mask;
+}
+
+static void load_brightness_from_nvs(void)
+{
+    nvs_handle_t h;
+    if (nvs_open("macropad", NVS_READONLY, &h) == ESP_OK) {
+        uint8_t val;
+        if (nvs_get_u8(h, "brightness", &val) == ESP_OK) {
+            g_brightness = val;
+        }
+        nvs_close(h);
+    }
 }
 
 void macropad_enter_deep_sleep(void)
@@ -336,9 +350,14 @@ static void flash_action(action_t a, uint8_t brightness) {
     light_driver_set_power(false);
 }
 
+static uint8_t level_to_pwm(uint8_t lvl) {
+    const uint8_t max = 255; // or your PWM max
+    return (uint8_t)((lvl * max) / 100);
+}
+
 static void on_button_action(uint8_t index, action_t act) {
-    ESP_LOGI(TAG, "Button %u -> %s (feedback=%u)", (unsigned)index, action_str(act), (unsigned)g_feedback_level);
-    flash_action(act, g_feedback_level);
+    ESP_LOGI(TAG, "Button %u -> %s (feedback=%u)", (unsigned)index, action_str(act), (unsigned)g_brightness);
+    flash_action(act, level_to_pwm(g_brightness));
     macropad_send_button_event(index, act);
 }
 
@@ -592,6 +611,16 @@ static void esp_zb_task(void *pv)
     esp_zb_attribute_list_t *macropad_cluster =
     esp_zb_zcl_attr_list_create(MACROPAD_CLUSTER_ID);
 
+    /*---------------------------------------------------------------
+     * BRIGHTNESS CLUSTER 
+     *-------------------------------------------------------------*/
+    // 0x0A00 – brightness color
+    esp_zb_custom_cluster_add_custom_attr(
+        macropad_cluster,
+        MACROPAD_ATTR_BRIGHTNESS_ID,
+        ESP_ZB_ZCL_ATTR_TYPE_U8,
+        ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+        &g_brightness);
 
     /*---------------------------------------------------------------
      * CLUSTER LIST (Basic + Identify + Macropad)
@@ -609,7 +638,7 @@ static void esp_zb_task(void *pv)
 
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_custom_cluster( cluster_list,
                                                             macropad_cluster,
-                                                            ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE));
+                                                            ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
 
     /*---------------------------------------------------------------
      * ENDPOINT CONFIGURATION
@@ -671,11 +700,22 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
         break;
 
     case MACROPAD_CLUSTER_ID:
-        /* If you add config attributes (e.g. per-key mode) to your macropad cluster,
-         * decode them here from message->attribute.data.value
-         */
-        break;
+        if (attr_id == MACROPAD_ATTR_BRIGHTNESS_ID &&
+            message->attribute.data.size == sizeof(uint8_t)) {
 
+            uint8_t new_val = *(uint8_t *)message->attribute.data.value;
+            g_brightness = new_val;
+            // Persist to NVS
+            nvs_handle_t h;
+            if (nvs_open("macropad", NVS_READWRITE, &h) == ESP_OK) {
+                nvs_set_u8(h, "brightness", g_brightness);
+                nvs_commit(h);
+                nvs_close(h);
+            }
+            ESP_LOGI(TAG, "Brightness updated to %u", g_brightness);
+        }
+        break;
+    
     default:
         /* Unknown or unhandled cluster */
         break;
@@ -732,7 +772,7 @@ void macropad_send_button_event(uint8_t button_id, action_t action)
     esp_zb_zcl_custom_cluster_cmd_req(&req);
     esp_zb_lock_release();
 
-    ESP_EARLY_LOGI(TAG, "Sent button event: button=%u action=%u", button_id, action);
+    //ESP_EARLY_LOGI(TAG, "Sent button event: button=%u action=%u", button_id, action);
 }
 
 /* ======================================================================= */
@@ -777,6 +817,8 @@ void app_main(void)
             }
         }
     }
+    nvs_flash_init();
+    load_brightness_from_nvs();
 
     ESP_LOGI(TAG, "Starting 16-button macropad");
     

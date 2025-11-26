@@ -57,6 +57,44 @@ const fzLocal = {
             };
         },
     },
+	
+	macropad_levels_attrs: {
+        // Listen to attribute reports or read responses on 0xFC00
+        cluster: 'manuSpecificAssaDoorLock',
+        type: ['readResponse', 'attributeReport'],
+        convert: (model, msg, publish, options, meta) => {
+            const result = {};
+            const data = msg.data || {};
+
+            // msg.data keys can be numbers or strings, handle both
+            const getAttr = (id) => data[id] ?? data[String(id)];
+
+            const brightness = getAttr(0x0A00);
+
+            if (brightness !== undefined) result.current_brightness = brightness;
+            return result;
+        },
+    },
+};
+const tzLocal = {
+    macropad_current_brightness: {
+        key: ['current_brightness'],
+        convertSet: async (entity, key, value, meta) => {
+            const v = Math.max(0, Math.min(100, Number(value)));
+            await entity.write(
+                'manuSpecificAssaDoorLock',
+                {0x0A00: {value: v, type: 0x20}}, // 0x20 = uint8
+                // no manufacturerCode needed if your cluster isn't manufacturer-specific in that sense
+            );
+            return {state: {current_brightness: v}};
+        },
+        convertGet: async (entity, key, meta) => {
+            await entity.read(
+                'manuSpecificAssaDoorLock',
+                [0x0A00],
+            );
+        },
+    },
 };
 
 export default {
@@ -66,8 +104,11 @@ export default {
     description: 'Custom 16-button macropad (ESP32-C6)',
     fromZigbee: [
         fzLocal.macropad_button_event,
+        fzLocal.macropad_levels_attrs,
     ],
-    toZigbee: [],
+    toZigbee: [
+        tzLocal.macropad_current_brightness,
+    ],
     exposes: [
         e.action([
             'button_0_single', 'button_1_single', 'button_2_single', 'button_3_single',
@@ -83,5 +124,19 @@ export default {
             'button_8_hold', 'button_9_hold', 'button_10_hold', 'button_11_hold',
             'button_12_hold', 'button_13_hold', 'button_14_hold', 'button_15_hold',			
         ]),
+
+        // NEW: config brighntess
+        {
+            type: 'numeric',
+            name: 'current_brightness',
+            label: 'Brightness',
+            property: 'current_brightness',
+            access: 7,  // state + set + get
+            category: 'config',
+            value_min: 0,
+            value_max: 100,
+			unit:'%',
+            description: 'Global brightness used for click feedbacks',
+        },
     ],
 };
