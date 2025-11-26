@@ -1,10 +1,4 @@
 /*
- * Zigbee HA_color_dimmable_light Example (ESP32-C6)
- * -------------------------------------------------
- * Simplified for MACROPAD:
- *  - Only Zigbee Level Control / Current Level is honored.
- *  - That brightness is used for the short LED feedback when a key is pressed.
- *  - Color & On/Off writes are ignored.
  *  - Pairing still blinks RED while not joined.
  */
 
@@ -34,14 +28,17 @@
 #define COLS 4
 #define BTN_COUNT (ROWS * COLS)
 
+//Must be RST Pins (support deep sleep)
 static const gpio_num_t ROW_PINS[ROWS] = {
     GPIO_NUM_2, GPIO_NUM_3, GPIO_NUM_4, GPIO_NUM_5,
 };
 
+//Any available Pins
 static const gpio_num_t COL_PINS[COLS] = {
     GPIO_NUM_18,GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_21,
 };
 
+//Native physical button button on board can still be connected with external button
 #define BOOT_BUTTON_GPIO     GPIO_NUM_9
 
 /* --- Deep sleep variables -------------------------------------- */
@@ -99,7 +96,6 @@ static uint8_t g_feedback_level = 80;
 
 /* --- Helpers ------------------------------------------------------------ */
 static inline uint64_t now_us(void) { return esp_timer_get_time(); }
-static inline uint32_t us_to_ms(uint64_t us) { return (uint32_t)(us / 1000ULL); }
 
 typedef enum { ACT_NONE, ACT_SINGLE, ACT_DOUBLE, ACT_HOLD } action_t;
 
@@ -384,20 +380,30 @@ static void matrix_scan(bool raw_states[BTN_COUNT])
     }
 }
 
+static void btn_state_reset(btn_state_t *b)
+{
+    memset(b, 0, sizeof(*b));
+}
+
 static void button_task(void *arg)
 {
+    
     const uint64_t debounce_us      = DEBOUNCE_MS * 1000ULL;
     const uint64_t double_click_us  = DOUBLE_CLICK_MS * 1000ULL;
     const uint64_t long_press_us    = HOLD_PRESS_MS * 1000ULL;
 
     bool raw_states[BTN_COUNT];
-
     while (true) {
+        if(!g_is_joined)
+        {
+            vTaskDelay(pdMS_TO_TICKS(BTN_POLL_INTERVAL_MS));
+            continue; // exit function if not connected to zigbee network.
+        }
         uint64_t now = now_us();
 
         // 1. Scan whole matrix once -> raw_states[]
         matrix_scan(raw_states);
-
+        
         // 2. Run your existing state machine per logical button
         for (int i = 0; i < BTN_COUNT; ++i) {
             bool raw = raw_states[i];    // <- instead of reading GPIO directly
@@ -735,21 +741,42 @@ void macropad_send_button_event(uint8_t button_id, action_t action)
 void app_main(void)
 {
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-
-    if (cause == ESP_SLEEP_WAKEUP_GPIO) {
-        uint64_t status = esp_sleep_get_gpio_wakeup_status();
-        ESP_LOGI(TAG, "Woke from deep sleep via GPIO, status=0x%llx",
-                 (unsigned long long)status);
-        // status bits match GPIO numbers; you can inspect which row woke it
-    } else {
-        ESP_LOGI(TAG, "Cold boot (cause=%d)", cause);
-    }
-
+    
     // Clear holds so we can reconfigure pins
     for (int c = 0; c < COLS; ++c) {
         gpio_hold_dis(COL_PINS[c]);
     }
 
+    matrix_gpio_init();
+    // Initialise button state array
+    for (int i = 0; i < BTN_COUNT; ++i) {
+        btn_state_reset(&g_btn[i]);
+    }
+    g_last_activity_us = now_us();
+    
+    if (cause == ESP_SLEEP_WAKEUP_GPIO) {
+        // We woke because some row went LOW (button pressed).
+        // Try to see which button(s) are still pressed *right now*.
+        bool raw_states[BTN_COUNT];
+        matrix_scan(raw_states);
+
+        for (int i = 0; i < BTN_COUNT; ++i) {
+            if (raw_states[i]) {
+                btn_state_t *b = &g_btn[i];
+
+                // Pretend this button is currently pressed
+                b->stable         = true;
+                b->prev_stable    = false;
+                b->hold_fired     = false;
+                b->press_start_us = g_last_activity_us;
+                b->last_change_us = g_last_activity_us;
+                b->last_release_us = 0;
+
+                // You could log it for debugging:
+                ESP_LOGI(TAG, "Woke with button %d pressed", i);
+            }
+        }
+    }
 
     ESP_LOGI(TAG, "Starting 16-button macropad");
     
@@ -769,10 +796,6 @@ void app_main(void)
     // --- Install ISR service ONCE ---
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     gpio_isr_handler_add(BOOT_BUTTON_GPIO, boot_button_isr, NULL);
-
-    matrix_gpio_init();
-
-    g_last_activity_us = now_us();
 
     // --- Launch tasks ---
     xTaskCreate(button_task, "button_task", 4096, NULL, 1, NULL);
