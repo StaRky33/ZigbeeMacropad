@@ -19,6 +19,7 @@
     "task.h": "c",
     "light_driver.h": "c",
     "esp_timer.h": "c",
-    "esp_check.h": "c"
+    "esp_check.h": "c",
+    "chrono": "c"
   }
 }
