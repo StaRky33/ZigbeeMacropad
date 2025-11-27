@@ -13,13 +13,14 @@ It gives 3 sorts of inputs, single click, double clicks and long click to add in
 | **MCU** | nanoESP32-C6-N8 |
 | **Switches** | 16 x Cherry MX Red (linear) |
 | **Battery** | 2 x EBL 1.5 V lithium-ion rechargeable AA cell |
-| **Buttons** | 6 mm tactile push button (BOOT / Reset) |
+| **Button** | 6 mm tactile push button (BOOT / Reset) |
 | **Power switch** | 13 mm by 8.5 mm on/off slide switch |
 | **BOOST Converter** | MT3608 DC-DC Boost converter (3.1v to 3.3v) |
 | **Magnets** | 4 x 10 mm × 2 mm neodymium discs |
 | **Threaded inserts** | 4 x M2.5 heat-set brass inserts |
 | **Screws** | 4 x M2.5 × 5 mm machine screws |
 | **Case** | 3D-printed PLA enclosure (about 79g with cap switches and supports) |
+| **Switches cap**| 16 x 3D-printed in PLA less than 18g total |
 
 ---
 
@@ -43,20 +44,54 @@ Development began in **Arduino IDE**, later migrated to **VS Code with ESP-IDF v
 - **Framework:** ESP-IDF v5.3.4  
 - **Zigbee SDK:** [Espressif ESP-Zigbee-SDK](https://github.com/espressif/esp-zigbee-sdk)  
 - **Zigbee Role:** Router / End Device  
-- **Endpoint Type:** HA Dimmable Light (only exposes brightness to Home Assistant) WIP
+- **Endpoint Type:** Custom Endpoint and clusters
 
 ### 🔧 Functionality
 - 16 GPIO-connected keys with **single**, **double**, and **long press** detection
 - **LED feedback** color for each type of press  
 - **LED feedback** brightness controlled via Zigbee “brightness” attribute  
 - **BOOT button** triggers Zigbee factory reset and new pairing mode  
+- **ON/OFF switch** physical button to turn everything off and recharge the batteries
 - **Blinking red LED** indicates pairing state  
 - **Debounce and ISR-driven** button logic for reliability  
+- **Deep sleep** after 20 sec to save battery time  
 
 ---
 
 ## 🗺️ Circuit Schematic
 ![Circuit Schematics](Pictures/circuitSchematics.png)
+---
+
+## 💰 Price Breakdown
+Calculated from **unit price × quantity used**:
+
+| Item | Pack Price | Qty Used | Unit Cost | Cost Used |
+|------|------------|----------|-----------|-----------|
+| nanoESP32C6-N8 | 27.48 € / 5 | 1 | 5.50 € | **5.50 €** |
+| Mechanical Switches | 8.18 € / 20 | 16 | 0.41 € | **6.54 €** |
+| Diodes | 1.20 € / 100 | 16 | 0.01 € | **0.19 €** |
+| Magnets | 4.99 € / 50 | 4 | 0.10 € | **0.40 €** |
+| M2.5 Inserts | 10.79 € / 600 | 8 | 0.018 € | **0.14 €** |
+| White PLA | 16.00 € / 1 kg | 100 g | 1.60 € | **1.60 €** |
+| 6mm Push Button | 2.23 € / 50 | 1 | 0.045 € | **0.04 €** |
+| ON/OFF Switch | 1.41 € / 5 | 1 | 0.28 € | **0.28 €** |
+| MT3608 Boost Converter | 2.11 € / 5 | 1 | 0.42 € | **0.42 €** |
+
+### **➡️ Total Cost per Macropad: 15.12 €**
+
+---
+
+## ⚠️ Note about the ESP32-C6 board
+
+Using the fake nanoESP32C6 board was a mistake:
+
+Documentation was poor
+Cost you time
+Not fully compatible with some ESP-IDF features
+
+Genuine Espressif ESP32-C6 modules cost only 6.89 € each,
+and even less when bought in bulk.
+
 ---
 
 ## 🧰 Build Instructions
@@ -101,15 +136,23 @@ The device will start blinking red to indicate Zigbee pairing mode.
 ## 🔗 Pair with Home Assistant
 
 Add macropad.mjs file to config/zigbee2mqtt/external_converters (if folder does not exist create it).
+Then reboot Zigbee2MQTT in Settings/Add-ons/Zigbee2MQTT/Info and press Restart (takes 30 seconds)
 In Home Assistant, open Settings → Devices & Services → Zigbee2MQTT → Permit join.
 Test button clicks (single, double, hold) — LED flashes will reflect the button type.
 You can now create an automation based on the button clicks.
+
+If in the Zigbee2MQTT interface/Devices/deviceName/Exposes there is not 3 attributes (Action, Brightness, Linkquality) there is an issue.
+You may have to change the cluster name to fit your home assistant. It is used 4 times in my file and called "manuSpecificAssaDoorLock".
+This name is automatically attributed by home assistant and cannot be changed.
+To find your cluster name, simply check the logs in Zigbee2MQTT. I prefer checking them in the add-on directly since there is more information.
+Add-on logs accessible in Settings/Add-ons/Zigbee2MQTT/Log
 
 ---
 
 ## ✨ Features Summary
 
 🔘 16 mechanical switches with multiple click detection
+🔋💤 Deep Sleep feature turning on after 20 sec to save battery
 💡 LED feedback brightness linked to Zigbee brightness setting
 🔄 BOOT button triggers factory reset and re-pairing
 🔴 Blinking red LED during pairing
@@ -127,4 +170,6 @@ Remixed 3D models remain under their respective creator licenses (see linked Pri
 
 ## 📸 Gallery
 
-//TODO Add pictures
+![Final project](Pictures/PXL_20251126_154406439.jpg)
+
+![Internals](Pictures/PXL_20251126_122801942.jpg)
