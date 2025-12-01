@@ -20,6 +20,7 @@
     "light_driver.h": "c",
     "esp_timer.h": "c",
     "esp_check.h": "c",
-    "chrono": "c"
+    "chrono": "c",
+    "ledc.h": "c"
   }
 }

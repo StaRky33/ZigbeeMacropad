@@ -12,7 +12,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-
+#include "rgb_led.h"
 
 #if !defined CONFIG_ZB_ZCZR
 #error Define ZB_ZCZR in idf.py menuconfig to compile light (Router) source code.
@@ -329,22 +329,43 @@ static const char* action_str(action_t a) {
     return (a==ACT_SINGLE) ? "single" : (a==ACT_DOUBLE) ? "double" : "hold";
 }
 
-static void flash_action(action_t a, uint8_t brightness) {
+// Your action_t should already exist
+// typedef enum { ACT_NONE, ACT_SINGLE, ACT_DOUBLE, ACT_HOLD } action_t;
+
+static void flash_action(action_t a, uint8_t brightness_percent)
+{
     /* If brightness is 0, skip visible flash */
-    if (brightness == 0) return;
+    if (brightness_percent == 0) return;
+
+    uint8_t r = 0, g = 0, b = 0;
 
     /* Fixed colors per action; only brightness comes from Zigbee */
-    switch(a){
-        case ACT_SINGLE: light_driver_set_color_xy(0x4ccd, 0x9999);break;  // green
-        case ACT_DOUBLE: light_driver_set_color_xy(0x2666, 0x0f5c);break;  // blue
-        case ACT_HOLD: light_driver_set_color_xy(0x6b58, 0x8157);break;  // yellow
-        default: break;
+    switch (a) {
+        case ACT_SINGLE:
+            // Example: green
+            r = 0;   g = 255; b = 0;
+            break;
+        case ACT_DOUBLE:
+            // Example: blue
+            r = 0;   g = 0;   b = 255;
+            break;
+        case ACT_HOLD:
+            // Example: yellow (R+G)
+            r = 255; g = 255; b = 0;
+            break;
+        default:
+            break;
     }
-    light_driver_set_power(true);
-    light_driver_set_level(brightness);   // adjust if you want dimmer pairing
+
+    /* Apply color + brightness */
+    rgb_led_set_rgb(r, g, b, brightness_percent);
+
     vTaskDelay(pdMS_TO_TICKS(150));
-    light_driver_set_power(false);
+
+    /* Turn off after flash */
+    rgb_led_off();
 }
+
 
 static uint8_t level_to_pwm(uint8_t lvl) {
     const uint8_t max = 255; // or your PWM max
