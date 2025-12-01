@@ -1,7 +1,3 @@
-/*
- *  - Pairing still blinks RED while not joined.
- */
-
 #include <stdio.h>
 #include <string.h>
 #include "esp_zb_macropad.h"
@@ -31,19 +27,19 @@
 
 //Must be RST Pins (support deep sleep)
 static const gpio_num_t ROW_PINS[ROWS] = {
-    GPIO_NUM_2, GPIO_NUM_3, GPIO_NUM_4, GPIO_NUM_5,
+    GPIO_NUM_0, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_4,
 };
 
 //Any available Pins
 static const gpio_num_t COL_PINS[COLS] = {
-    GPIO_NUM_18,GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_21,
+    GPIO_NUM_18,GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_17,
 };
 
 //Native physical button button on board can still be connected with external button
 #define BOOT_BUTTON_GPIO     GPIO_NUM_9
 
 /* --- Deep sleep variables -------------------------------------- */
-#define INACTIVITY_SLEEP_MS   (20 * 1000)        // 1 minute --> 20sec test
+#define INACTIVITY_SLEEP_MS   (120 * 1000)        // 1 minute --> 20sec test
 #define INACTIVITY_SLEEP_US   (INACTIVITY_SLEEP_MS * 1000ULL)
 
 static uint64_t g_last_activity_us = 0;
@@ -724,8 +720,7 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
     return ESP_OK;
 }
 
-static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id,
-                                   const void *message)
+static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id, const void *message) 
 {
     esp_err_t ret = ESP_OK;
 

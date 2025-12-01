@@ -10,12 +10,11 @@ It gives 3 sorts of inputs, single click, double clicks and long click to add in
 
 | Component | Description |
 |------------|-------------|
-| **MCU** | nanoESP32-C6-N8 |
+| **MCU** | Seeed Studio XIAO ESP32C6 |
 | **Switches** | 16 x Cherry MX Red (linear) |
-| **Battery** | 2 x EBL 1.5 V lithium-ion rechargeable AA cell |
+| **Battery** | 1 x 3.7V 1000mAh Lipo 603048 |
 | **Button** | 6 mm tactile push button (BOOT / Reset) |
 | **Power switch** | 13 mm by 8.5 mm on/off slide switch |
-| **BOOST Converter** | MT3608 DC-DC Boost converter (3.1v to 3.3v) |
 | **Magnets** | 4 x 10 mm × 2 mm neodymium discs |
 | **Threaded inserts** | 4 x M2.5 heat-set brass inserts |
 | **Screws** | 4 x M2.5 × 5 mm machine screws |
@@ -26,14 +25,13 @@ It gives 3 sorts of inputs, single click, double clicks and long click to add in
 
 ## 🧩 3D-Printed Parts
 
-Designed and customized in **Tinkercad**, printed with **Centauri Carbon and white PLA**.  
+Designed and customized in **Tinkercad**, printed with **Centauri Carbon and transparent PLA**.  
 Printed at 0.2 mm layer height, 15–20% infill, no supports required.
 
 Files available on Github or in Printables [here](https://www.printables.com/model/1496778-zigbee-macropad-16-buttons-esp32c6) or Thingiverse [there](https://www.thingiverse.com/thing:7215442).
 
 ### 🔗 Remixed Models
 - [16 Keys Macropad](https://www.printables.com/model/140766-16-keys-macropad)  
-- [AA Battery Holder for Dupont Jumper](https://www.printables.com/model/380920-aa-battery-holder-for-dupont-jumper)  
 - [Simple Cherry MX Keycap](https://www.printables.com/model/118708-simple-cherry-mx-keycap)
 
 ---
@@ -61,6 +59,7 @@ Development began in **Arduino IDE**, later migrated to **VS Code with ESP-IDF v
 ---
 
 ## 🗺️ Circuit Schematic
+WIP
 ![Circuit Schematics](Pictures/circuitSchematics.png)
 ---
 
@@ -69,32 +68,26 @@ Calculated from **unit price × quantity used**:
 
 | Item | Pack Price | Qty Used | Unit Cost | Cost Used |
 |------|------------|----------|-----------|-----------|
-| nanoESP32C6-N8 | 27.48 € / 5 | 1 | 5.50 € | **5.50 €** |
+| XIAO Esp32C6 | 8.04 € / 1 | 1 | 8.04 € | **8.04 €** |
 | Mechanical Switches | 8.18 € / 20 | 16 | 0.41 € | **6.54 €** |
 | Diodes | 1.20 € / 100 | 16 | 0.01 € | **0.19 €** |
 | Magnets | 4.99 € / 50 | 4 | 0.10 € | **0.40 €** |
-| M2.5 Inserts | 10.79 € / 600 | 8 | 0.018 € | **0.14 €** |
-| White PLA | 16.00 € / 1 kg | 100 g | 1.60 € | **1.60 €** |
+| M2.5 Inserts | 10.79 € / 600 | 9 | 0.018 € | **0.16 €** |
+| Transparent PLA | 16.00 € / 1 kg | 100 g | 1.60 € | **1.60 €** |
 | 6mm Push Button | 2.23 € / 50 | 1 | 0.045 € | **0.04 €** |
 | ON/OFF Switch | 1.41 € / 5 | 1 | 0.28 € | **0.28 €** |
-| MT3608 Boost Converter | 2.11 € / 5 | 1 | 0.42 € | **0.42 €** |
-| EBL AA 1.5V 3300mWh lithium-ion battery | 24.21 € / 4 | 2 | 12.11 € | **12.11 €** |
-
+| 3.7V 1000mAh 603048 Lipo Battery  | 9.49 € / 3 | 1 | 3.16 € | **3.16 €** |
    
-### **➡️ Total Cost per Macropad: 27.23 €**
+### **➡️ Total Cost per Macropad: 20.45 €**
 
 ---
 
 ## ⚠️ Note about the ESP32-C6 board
 
-Using the fake nanoESP32C6 board was a mistake:
+Using the Seeed Studio XIAO ESP32C6 is a breethe. 
 
-Documentation was poor
-Cost you time
-Not fully compatible with some ESP-IDF features
-
-Genuine Espressif ESP32-C6 modules cost only 6.89 € each,
-and even less when bought in bulk.
+The documentation is excellent.
+The chip already contains a BMS so you can plug the battery directly in and charge it with USB-C
 
 ---
 
@@ -107,7 +100,7 @@ and even less when bought in bulk.
 
 ### ⚡ 2. Mount the Components
 - **Cherry MX switches**: press-fit into the 16-slot plate, solder to perfboard or PCB or with simple wires.
-- **nanoESP32-C6-N8**: simply clip in place with any fixation.
+- **XIAO ESP32C6**: simply clip in place with any fixation. You might need to push a bit hard.
 - **6 mm BOOT button**: mount to a small hole on the side (for Zigbee reset). Add some glue from glue gun.
 - **Power switch**: connect inline with battery’s.
 - **Battery holder**: Press fit battery inside. The EBL battery have a builtin BMS so I glue them in their slot with the micro usb accessible outside.
@@ -116,14 +109,10 @@ and even less when bought in bulk.
 ### 🔋 3. Wiring Overview
 | Connection | Description |
 |-------------|-------------|
-| **GPIO 2,3,4,5 and 18,19,20,21** | Follow the wiring diagram.|
-| **GPIO 9** | BOOT / Reset button. Connect to one side of the 6mm button and the other to any GND. |
-| **3.3 V & GND** | Power rails for ESP32-C6 and key pull-ups. |
-| **Battery pack** | 3 x 1.5 V Li-ion cell inline. Minus to Vin- and Plus to Vin+ of MT3608 (reach 4.5V with no cutout and goes to 0 when empty). |
-| **MT3608** | Vin+ and Vin- to battery.Vout+ and Vout- to 3.3V and GND on ESP32 |
+| **GPIO 0,1,2,4 and 18,19,20,17** | Follow the wiring diagram.|
+| **GPIO 9** | BOOT / Reset button. Connect to one side of the 6mm button and the other to GND. |
+| **Battery pack** | Bat+ and Bat- on the ESP32 with bat + in line with the On/Off switch. |
 | **On/Off switch** | Inline with battery lead. |
-
-> 💡 Use internal pull-ups on all button pins; connect switches to **GND**.
 
 ### 🔧 4. Flash the Firmware
 1. Install **ESP-IDF v5.3.4** (or newer).  
