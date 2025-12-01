@@ -20,6 +20,7 @@ It gives 3 sorts of inputs, single click, double clicks and long click to add in
 | **Screws** | 4 x M2.5 × 5 mm machine screws |
 | **Case** | 3D-printed PLA enclosure (about 79g with cap switches and supports) |
 | **Switches cap**| 16 x 3D-printed in PLA less than 18g total |
+| **External RGB Led 4 pins**| 1 x RGB Led |
 
 ---
 
@@ -59,7 +60,8 @@ Development began in **Arduino IDE**, later migrated to **VS Code with ESP-IDF v
 ---
 
 ## 🗺️ Circuit Schematic
-WIP
+[Link to circuit] (https://www.circuit-diagram.org/editor/c/4865aa39fb9b4097a776ca335299ee0a)
+
 ![Circuit Schematics](Pictures/circuitSchematics.png)
 ---
 
@@ -77,8 +79,9 @@ Calculated from **unit price × quantity used**:
 | 6mm Push Button | 2.23 € / 50 | 1 | 0.045 € | **0.04 €** |
 | ON/OFF Switch | 1.41 € / 5 | 1 | 0.28 € | **0.28 €** |
 | 3.7V 1000mAh 603048 Lipo Battery  | 9.49 € / 3 | 1 | 3.16 € | **3.16 €** |
+| External RGB Led | 1.29 € / 50 | 1 | 0.03 € | ** 0.03 €** |
    
-### **➡️ Total Cost per Macropad: 20.45 €**
+### **➡️ Total Cost per Macropad: 20.44 €**
 
 ---
 
