@@ -85,7 +85,6 @@ static btn_state_t g_btn[BTN_COUNT];
 /* --- Zigbee + LED state ------------------------------------------------- */
 static bool g_is_joined     = false;
 static bool g_blinking      = false;
-static bool g_driver_ready  = false;
 static bool g_blink_on      = false;
 static bool g_zb_ready      = false;
 
@@ -232,16 +231,9 @@ void macropad_enter_deep_sleep(void)
 /* ======================================================================= */
 static void zb_blink_step(void)
 {
-    if (!g_driver_ready) {
-        esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
-        esp_zb_scheduler_alarm((esp_zb_callback_t)zb_blink_step, 0, 500);
-        return;
-    }
-
     if (!g_blinking) {
         if (g_blink_on) {                  // ensure off
-            light_driver_set_level(0);
-            light_driver_set_power(false);
+            rgb_led_off();
             g_blink_on = false;
         }
         esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
@@ -250,14 +242,9 @@ static void zb_blink_step(void)
 
     g_blink_on = !g_blink_on;
     if (g_blink_on) {
-        light_driver_set_color_xy(0xA3D6, 0x547B);  // red
-        //green : Color X: 0x4ccd  Color Y: 0x9999
-        //blue : Color X: 0x2666  Color Y: 0x0f5c
-        //yellow : Color X: 0x6b58  Color Y: 0x8157
-        light_driver_set_power(true);
-        light_driver_set_level(100);   // adjust if you want dimmer pairing
+        rgb_led_set_rgb(255, 0, 0, g_brightness);
     } else {
-        light_driver_set_level(0);
+        rgb_led_off();
     }
 
     /* Reschedule single instance */
@@ -269,8 +256,7 @@ static void zb_stop_pairing_blink(void)
 {
     g_blinking = false;
     if (g_blink_on) {
-        light_driver_set_level(0);
-        light_driver_set_power(false);
+        rgb_led_off();
         g_blink_on = false;
     }
     esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
@@ -500,21 +486,6 @@ static void button_task(void *arg)
 }
 
 /* ======================================================================= */
-/*                  DEFERRED LIGHT DRIVER INITIALIZATION                   */
-/* ======================================================================= */
-static esp_err_t deferred_driver_init(void)
-{
-    static bool inited = false;
-    if (!inited) {
-        light_driver_init(LIGHT_DEFAULT_OFF);
-        g_driver_ready = true;
-        ESP_LOGI(TAG, "Light driver initialized");
-        inited = true;
-    }
-    return inited ? ESP_OK : ESP_FAIL;
-}
-
-/* ======================================================================= */
 /*                      ZIGBEE SIGNAL HANDLER                              */
 /* ======================================================================= */
 void esp_zb_app_signal_handler(esp_zb_app_signal_t *sig)
@@ -532,7 +503,6 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *sig)
     case ESP_ZB_BDB_SIGNAL_DEVICE_FIRST_START:
     case ESP_ZB_BDB_SIGNAL_DEVICE_REBOOT:
         if (err_status == ESP_OK) {
-            deferred_driver_init();
             bool is_fn = esp_zb_bdb_is_factory_new();
             g_is_joined = !is_fn;
             g_blinking  = is_fn;
