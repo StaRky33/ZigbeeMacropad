@@ -29,6 +29,8 @@ It gives 3 sorts of inputs, single click, double clicks and long click to add in
 Designed and customized in **Tinkercad**, printed with **Centauri Carbon and white PLA**.  
 Printed at 0.2 mm layer height, 15–20% infill, no supports required.
 
+Files available on Github or in Printables [here](https://www.printables.com/model/1496778-zigbee-macropad-16-buttons-esp32c6) or Thingiverse [there](https://www.thingiverse.com/thing:7215442).
+
 ### 🔗 Remixed Models
 - [16 Keys Macropad](https://www.printables.com/model/140766-16-keys-macropad)  
 - [AA Battery Holder for Dupont Jumper](https://www.printables.com/model/380920-aa-battery-holder-for-dupont-jumper)  
@@ -76,8 +78,10 @@ Calculated from **unit price × quantity used**:
 | 6mm Push Button | 2.23 € / 50 | 1 | 0.045 € | **0.04 €** |
 | ON/OFF Switch | 1.41 € / 5 | 1 | 0.28 € | **0.28 €** |
 | MT3608 Boost Converter | 2.11 € / 5 | 1 | 0.42 € | **0.42 €** |
+| EBL AA 1.5V 3300mWh lithium-ion battery | 24.21 € / 4 | 2 | 12.11 € | **12.11 €** |
 
-### **➡️ Total Cost per Macropad: 15.12 €**
+   
+### **➡️ Total Cost per Macropad: 27.23 €**
 
 ---
 
