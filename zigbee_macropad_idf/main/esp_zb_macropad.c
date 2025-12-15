@@ -28,12 +28,12 @@
 //Must be RST Pins (support deep sleep)
 static const gpio_num_t ROW_PINS[ROWS] = {
     GPIO_NUM_0, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_4,
-};
+}; //D0, D1, D2, MTMS
 
 //Any available Pins
 static const gpio_num_t COL_PINS[COLS] = {
     GPIO_NUM_18,GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_17,
-};
+}; //D10, D9, D8, D7
 
 //Native physical button button on board can still be connected with external button
 #define BOOT_BUTTON_GPIO     GPIO_NUM_9

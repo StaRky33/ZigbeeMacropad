@@ -5,9 +5,9 @@
 static const char *TAG = "RGB_LED";
 
 /* GPIOs for RGB LED (common cathode, pin to GND) */
-#define RGB_LED_R_GPIO   GPIO_NUM_21
-#define RGB_LED_G_GPIO   GPIO_NUM_22
-#define RGB_LED_B_GPIO   GPIO_NUM_23
+#define RGB_LED_R_GPIO   GPIO_NUM_21 // D3
+#define RGB_LED_G_GPIO   GPIO_NUM_22 // D4
+#define RGB_LED_B_GPIO   GPIO_NUM_23 // D5
 
 /* LEDC config */
 #define RGB_LED_LEDC_MODE      LEDC_LOW_SPEED_MODE
