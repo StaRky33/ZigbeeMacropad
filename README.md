@@ -18,9 +18,12 @@ It gives 3 sorts of inputs, single click, double clicks and long click to add in
 | **Magnets** | 4 x 10 mm × 2 mm neodymium discs |
 | **Threaded inserts** | 4 x M2.5 heat-set brass inserts |
 | **Screws** | 4 x M2.5 × 5 mm machine screws |
+| **Didodes**| 16 x 1N4148 Small Signal Fast Switching Diodes |
+| **External RGB Led**| 1 x 4 pins 8mm RGB Led Common Cathode |
+| **220 ohm resistor**| 3 x 220 ohm resistor |
 | **Case** | 3D-printed PLA enclosure (about 79g with cap switches and supports) |
 | **Switches cap**| 16 x 3D-printed in PLA less than 18g total |
-| **External RGB Led 4 pins**| 1 x RGB Led |
+
 
 ---
 
@@ -72,16 +75,17 @@ Calculated from **unit price × quantity used**:
 |------|------------|----------|-----------|-----------|
 | XIAO Esp32C6 | 8.04 € / 1 | 1 | 8.04 € | **8.04 €** |
 | Mechanical Switches | 8.18 € / 20 | 16 | 0.41 € | **6.54 €** |
-| Diodes | 1.20 € / 100 | 16 | 0.01 € | **0.19 €** |
+| Diodes 1N4148 | 1.20 € / 100 | 16 | 0.01 € | **0.19 €** |
 | Magnets | 4.99 € / 50 | 4 | 0.10 € | **0.40 €** |
 | M2.5 Inserts | 10.79 € / 600 | 9 | 0.018 € | **0.16 €** |
 | Transparent PLA | 16.00 € / 1 kg | 100 g | 1.60 € | **1.60 €** |
 | 6mm Push Button | 2.23 € / 50 | 1 | 0.045 € | **0.04 €** |
 | ON/OFF Switch | 1.41 € / 5 | 1 | 0.28 € | **0.28 €** |
 | 3.7V 1000mAh 603048 Lipo Battery  | 9.49 € / 3 | 1 | 3.16 € | **3.16 €** |
-| External RGB Led | 1.29 € / 50 | 1 | 0.03 € | ** 0.03 €** |
+| External RGB Led Common Cathode | 1.29 € / 50 | 1 | 0.03 € | ** 0.03 €** |
+| 220ohm resistore | 0,93€ / 100 | 3 | 0.028 € | ** 0.03 €** |
    
-### **➡️ Total Cost per Macropad: 20.44 €**
+### **➡️ Total Cost per Macropad: 20.47 €**
 
 ---
 
@@ -112,8 +116,9 @@ The chip already contains a BMS so you can plug the battery directly in and char
 ### 🔋 3. Wiring Overview
 | Connection | Description |
 |-------------|-------------|
-| **GPIO 0,1,2,4 and 18,19,20,17** | Follow the wiring diagram.|
-| **GPIO 9** | BOOT / Reset button. Connect to one side of the 6mm button and the other to GND. |
+| **GPIO 0(D0),1(D1),2(D2),4(MTMS) and 18(D10),19(D9),20(D8),17(D7)** | 0,1,2,4 are for Rows, 18,19,20,17 are for Columns. Follow the wiring diagram. Connect 4 wires to columns and to one side of every switch. Connect all diodes to the other side of the switch. Make sure the black marker is connected to the switch and the other end is connected to the 3 other diodes on the same row. |
+| **GPIO 9(BOOT)** | BOOT / Reset button. Connect to one side of the 6mm button and the other to GND. |
+| **GPIO 21(D3),22(D4),23(D5)** | RGB Led is connected to 220 ohm resistor and to ground. The longest pin is ground. The side with a single pin it's R that goes into D5, then D4 for G, then D3 for B |
 | **Battery pack** | Bat+ and Bat- on the ESP32 with bat + in line with the On/Off switch. |
 | **On/Off switch** | Inline with battery lead. |
 
