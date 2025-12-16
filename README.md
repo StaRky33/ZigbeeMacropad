@@ -19,6 +19,7 @@ It gives 3 sorts of inputs, single click, double clicks and long click to add in
 | **Magnets** | 4 x 10 mm × 2 mm neodymium discs |
 | **Threaded inserts** | 4 x M2.5 heat-set brass inserts |
 | **Screws** | 4 x M2.5 × 5 mm machine screws |
+| **Didodes**| 16 x 1N4148 Small Signal Fast Switching Diodes |
 | **Case** | 3D-printed PLA enclosure (about 79g with cap switches and supports) |
 | **Switches cap**| 16 x 3D-printed in PLA less than 18g total |
 
@@ -71,7 +72,7 @@ Calculated from **unit price × quantity used**:
 |------|------------|----------|-----------|-----------|
 | nanoESP32C6-N8 | 27.48 € / 5 | 1 | 5.50 € | **5.50 €** |
 | Mechanical Switches | 8.18 € / 20 | 16 | 0.41 € | **6.54 €** |
-| Diodes | 1.20 € / 100 | 16 | 0.01 € | **0.19 €** |
+| Diodes 1N4148 | 1.20 € / 100 | 16 | 0.01 € | **0.19 €** |
 | Magnets | 4.99 € / 50 | 4 | 0.10 € | **0.40 €** |
 | M2.5 Inserts | 10.79 € / 600 | 8 | 0.018 € | **0.14 €** |
 | White PLA | 16.00 € / 1 kg | 100 g | 1.60 € | **1.60 €** |
@@ -116,14 +117,11 @@ and even less when bought in bulk.
 ### 🔋 3. Wiring Overview
 | Connection | Description |
 |-------------|-------------|
-| **GPIO 2,3,4,5 and 18,19,20,21** | Follow the wiring diagram.|
+| **GPIO 2,3,4,5 and 18,19,20,21** | 2,3,4,5 are Rows, 18,19,20,21 are Columns. Follow the wiring diagram. Connect 4 wires to columns and to one side of every switch. Connect all diodes to the other side of the switch. Make sure the black marker is connected to the switch and the other end is connected to the 3 other diodes on the same row. |
 | **GPIO 9** | BOOT / Reset button. Connect to one side of the 6mm button and the other to any GND. |
-| **3.3 V & GND** | Power rails for ESP32-C6 and key pull-ups. |
-| **Battery pack** | 3 x 1.5 V Li-ion cell inline. Minus to Vin- and Plus to Vin+ of MT3608 (reach 4.5V with no cutout and goes to 0 when empty). |
+| **Battery pack** | 2 x 1.5 V Li-ion cell inline. Minus to Vin- and Plus to Vin+ of MT3608 (reach 3.1V with no cutout and goes to 0 when empty). |
 | **MT3608** | Vin+ and Vin- to battery.Vout+ and Vout- to 3.3V and GND on ESP32 |
-| **On/Off switch** | Inline with battery lead. |
-
-> 💡 Use internal pull-ups on all button pins; connect switches to **GND**.
+| **On/Off switch** | Inline with any battery lead. |
 
 ### 🔧 4. Flash the Firmware
 1. Install **ESP-IDF v5.3.4** (or newer).  
