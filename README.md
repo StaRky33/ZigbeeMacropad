@@ -19,7 +19,7 @@ It gives 3 sorts of inputs, single click, double clicks and long click to add in
 | **Threaded inserts** | 4 x M2.5 heat-set brass inserts |
 | **Screws** | 4 x M2.5 × 5 mm machine screws |
 | **Didodes**| 16 x 1N4148 Small Signal Fast Switching Diodes |
-| **External RGB Led**| 1 x 4 pins 8mm RGB Led Common Cathode |
+| **External RGB Led**| 1 x 4 pins 5mm RGB Led Common Cathode |
 | **220 ohm resistor**| 3 x 220 ohm resistor |
 | **Case** | 3D-printed PLA enclosure (about 79g with cap switches and supports) |
 | **Switches cap**| 16 x 3D-printed in PLA less than 18g total |
@@ -82,7 +82,7 @@ Calculated from **unit price × quantity used**:
 | 6mm Push Button | 2.23 € / 50 | 1 | 0.045 € | **0.04 €** |
 | ON/OFF Switch | 1.41 € / 5 | 1 | 0.28 € | **0.28 €** |
 | 3.7V 1000mAh 603048 Lipo Battery  | 9.49 € / 3 | 1 | 3.16 € | **3.16 €** |
-| External RGB Led Common Cathode | 1.29 € / 50 | 1 | 0.03 € | ** 0.03 €** |
+| External 5mm RGB Led Common Cathode | 1.29 € / 50 | 1 | 0.03 € | ** 0.03 €** |
 | 220ohm resistore | 0,93€ / 100 | 3 | 0.028 € | ** 0.03 €** |
    
 ### **➡️ Total Cost per Macropad: 20.47 €**
