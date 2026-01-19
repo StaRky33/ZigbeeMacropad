@@ -1,7 +1,3 @@
-/*
- *  - Pairing still blinks RED while not joined.
- */
-
 #include <stdio.h>
 #include <string.h>
 #include "esp_zb_macropad.h"
@@ -16,7 +12,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-
+#include "rgb_led.h"
 
 #if !defined CONFIG_ZB_ZCZR
 #error Define ZB_ZCZR in idf.py menuconfig to compile light (Router) source code.
@@ -31,19 +27,19 @@
 
 //Must be RST Pins (support deep sleep)
 static const gpio_num_t ROW_PINS[ROWS] = {
-    GPIO_NUM_2, GPIO_NUM_3, GPIO_NUM_4, GPIO_NUM_5,
-};
+    GPIO_NUM_0, GPIO_NUM_1, GPIO_NUM_2, GPIO_NUM_4,
+}; //D0, D1, D2, MTMS
 
 //Any available Pins
 static const gpio_num_t COL_PINS[COLS] = {
-    GPIO_NUM_18,GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_21,
-};
+    GPIO_NUM_17, GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_18,
+}; //D10, D9, D8, D7
 
 //Native physical button button on board can still be connected with external button
 #define BOOT_BUTTON_GPIO     GPIO_NUM_9
 
 /* --- Deep sleep variables -------------------------------------- */
-#define INACTIVITY_SLEEP_MS   (20 * 1000)        // 1 minute --> 20sec test
+#define INACTIVITY_SLEEP_MS   (120 * 1000)        // 1 minute --> 20sec test
 #define INACTIVITY_SLEEP_US   (INACTIVITY_SLEEP_MS * 1000ULL)
 
 static uint64_t g_last_activity_us = 0;
@@ -89,7 +85,6 @@ static btn_state_t g_btn[BTN_COUNT];
 /* --- Zigbee + LED state ------------------------------------------------- */
 static bool g_is_joined     = false;
 static bool g_blinking      = false;
-static bool g_driver_ready  = false;
 static bool g_blink_on      = false;
 static bool g_zb_ready      = false;
 
@@ -236,16 +231,9 @@ void macropad_enter_deep_sleep(void)
 /* ======================================================================= */
 static void zb_blink_step(void)
 {
-    if (!g_driver_ready) {
-        esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
-        esp_zb_scheduler_alarm((esp_zb_callback_t)zb_blink_step, 0, 500);
-        return;
-    }
-
     if (!g_blinking) {
         if (g_blink_on) {                  // ensure off
-            light_driver_set_level(0);
-            light_driver_set_power(false);
+            rgb_led_off();
             g_blink_on = false;
         }
         esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
@@ -254,14 +242,9 @@ static void zb_blink_step(void)
 
     g_blink_on = !g_blink_on;
     if (g_blink_on) {
-        light_driver_set_color_xy(0xA3D6, 0x547B);  // red
-        //green : Color X: 0x4ccd  Color Y: 0x9999
-        //blue : Color X: 0x2666  Color Y: 0x0f5c
-        //yellow : Color X: 0x6b58  Color Y: 0x8157
-        light_driver_set_power(true);
-        light_driver_set_level(100);   // adjust if you want dimmer pairing
+        rgb_led_set_rgb(255, 0, 0, g_brightness);
     } else {
-        light_driver_set_level(0);
+        rgb_led_off();
     }
 
     /* Reschedule single instance */
@@ -273,8 +256,7 @@ static void zb_stop_pairing_blink(void)
 {
     g_blinking = false;
     if (g_blink_on) {
-        light_driver_set_level(0);
-        light_driver_set_power(false);
+        rgb_led_off();
         g_blink_on = false;
     }
     esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
@@ -333,22 +315,43 @@ static const char* action_str(action_t a) {
     return (a==ACT_SINGLE) ? "single" : (a==ACT_DOUBLE) ? "double" : "hold";
 }
 
-static void flash_action(action_t a, uint8_t brightness) {
+// Your action_t should already exist
+// typedef enum { ACT_NONE, ACT_SINGLE, ACT_DOUBLE, ACT_HOLD } action_t;
+
+static void flash_action(action_t a, uint8_t brightness_percent)
+{
     /* If brightness is 0, skip visible flash */
-    if (brightness == 0) return;
+    if (brightness_percent == 0) return;
+
+    uint8_t r = 0, g = 0, b = 0;
 
     /* Fixed colors per action; only brightness comes from Zigbee */
-    switch(a){
-        case ACT_SINGLE: light_driver_set_color_xy(0x4ccd, 0x9999);break;  // green
-        case ACT_DOUBLE: light_driver_set_color_xy(0x2666, 0x0f5c);break;  // blue
-        case ACT_HOLD: light_driver_set_color_xy(0x6b58, 0x8157);break;  // yellow
-        default: break;
+    switch (a) {
+        case ACT_SINGLE:
+            // Example: green
+            r = 0;   g = 255; b = 0;
+            break;
+        case ACT_DOUBLE:
+            // Example: blue
+            r = 0;   g = 0;   b = 255;
+            break;
+        case ACT_HOLD:
+            // Example: yellow (R+G)
+            r = 255; g = 255; b = 0;
+            break;
+        default:
+            break;
     }
-    light_driver_set_power(true);
-    light_driver_set_level(brightness);   // adjust if you want dimmer pairing
+
+    /* Apply color + brightness */
+    rgb_led_set_rgb(r, g, b, brightness_percent);
+
     vTaskDelay(pdMS_TO_TICKS(150));
-    light_driver_set_power(false);
+
+    /* Turn off after flash */
+    rgb_led_off();
 }
+
 
 static uint8_t level_to_pwm(uint8_t lvl) {
     const uint8_t max = 255; // or your PWM max
@@ -483,21 +486,6 @@ static void button_task(void *arg)
 }
 
 /* ======================================================================= */
-/*                  DEFERRED LIGHT DRIVER INITIALIZATION                   */
-/* ======================================================================= */
-static esp_err_t deferred_driver_init(void)
-{
-    static bool inited = false;
-    if (!inited) {
-        light_driver_init(LIGHT_DEFAULT_OFF);
-        g_driver_ready = true;
-        ESP_LOGI(TAG, "Light driver initialized");
-        inited = true;
-    }
-    return inited ? ESP_OK : ESP_FAIL;
-}
-
-/* ======================================================================= */
 /*                      ZIGBEE SIGNAL HANDLER                              */
 /* ======================================================================= */
 void esp_zb_app_signal_handler(esp_zb_app_signal_t *sig)
@@ -515,7 +503,6 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *sig)
     case ESP_ZB_BDB_SIGNAL_DEVICE_FIRST_START:
     case ESP_ZB_BDB_SIGNAL_DEVICE_REBOOT:
         if (err_status == ESP_OK) {
-            deferred_driver_init();
             bool is_fn = esp_zb_bdb_is_factory_new();
             g_is_joined = !is_fn;
             g_blinking  = is_fn;
@@ -724,8 +711,7 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
     return ESP_OK;
 }
 
-static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id,
-                                   const void *message)
+static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id, const void *message) 
 {
     esp_err_t ret = ESP_OK;
 

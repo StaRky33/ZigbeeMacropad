@@ -2,7 +2,7 @@
   "idf.openOcdConfigs": [
     "board/esp32c6-builtin.cfg"
   ],
-  "idf.portWin": "COM5",
+  "idf.portWin": "COM8",
   "idf.flashType": "UART",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32c6"
@@ -20,6 +20,8 @@
     "light_driver.h": "c",
     "esp_timer.h": "c",
     "esp_check.h": "c",
-    "chrono": "c"
+    "chrono": "c",
+    "ledc.h": "c",
+    "random": "c"
   }
 }
