@@ -173,4 +173,4 @@ Remixed 3D models remain under their respective creator licenses (see linked Pri
 
 ![Final project](Pictures/PXL_20251212_120048397.jpg)
 
-![Internals](Pictures/PXL_20251217_133015329.jpg)
+![Internals](Pictures/PXL_20260106_132522850.jpg)
