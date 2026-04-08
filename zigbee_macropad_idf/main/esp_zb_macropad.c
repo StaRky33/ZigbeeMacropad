@@ -31,12 +31,16 @@ static const gpio_num_t ROW_PINS[ROWS] = {
 }; //D0, D1, D2, MTMS
 
 //Any available Pins
+//White macropad GPIO_NUM_18, GPIO_NUM_20, GPIO_NUM_19, GPIO_NUM_17,
+//Black macropad GPIO_NUM_17, GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_18,
 static const gpio_num_t COL_PINS[COLS] = {
-    GPIO_NUM_17, GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_18,
+    GPIO_NUM_18, GPIO_NUM_20, GPIO_NUM_19, GPIO_NUM_17,
 }; //D10, D9, D8, D7
 
 //Native physical button button on board can still be connected with external button
-#define BOOT_BUTTON_GPIO     GPIO_NUM_9
+//White macropad GPIO_NUM_16
+//Black macropad GPIO_NUM_9
+#define BOOT_BUTTON_GPIO     GPIO_NUM_16
 
 /* --- Deep sleep variables -------------------------------------- */
 #define INACTIVITY_SLEEP_MS   (120 * 1000)        // 1 minute --> 20sec test
@@ -54,7 +58,7 @@ static uint64_t g_last_activity_us = 0;
 #define MACROPAD_ENDPOINT            0x01
 
 /* Custom cluster used to report button events to Z2M */
-#define MACROPAD_CLUSTER_ID          0xFC00
+#define MACROPAD_CLUSTER_ID          0xFF00
 #define MACROPAD_CMD_BUTTON_EVENT    0x00
 
 #define MACROPAD_ATTR_BRIGHTNESS_ID    0x0A00
