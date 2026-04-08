@@ -6,7 +6,7 @@
       "chipFamily": "ESP32-C6",
       "parts": [
         {
-          "path": "https://github.com/StaRky33/ZigbeeMacropad/releases/download/v2.0.0/macropad_v2.0.0_merged.bin",
+          "path": "https://github.com/StaRky33/ZigbeeMacropad/releases/download/v2.0.0/macropad_v2.0.1_merged.bin",
           "offset": 0
         }
       ]
