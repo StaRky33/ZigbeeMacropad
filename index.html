@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zigbee Macropad Flasher</title>
+  <script
+    type="module"
+    src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module">
+  </script>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: 60px auto;
+      text-align: center;
+      background: #1a1a2e;
+      color: #eee;
+    }
+    h1 { color: #e94560; }
+    p  { color: #aaa; margin: 10px 0 30px; }
+    esp-web-install-button {
+      margin-top: 20px;
+    }
+    .note {
+      font-size: 0.85em;
+      color: #666;
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎹 Zigbee Macropad</h1>
+  <p>Flash your ESP32-C6 directly from your browser.<br/>
+     Works on Chrome and Edge only.</p>
+
+  <esp-web-install-button
+    manifest="manifest.json">
+  </esp-web-install-button>
+
+  <p class="note">
+    Connect your ESP32-C6 via USB before clicking Install.<br/>
+    After flashing, follow the
+    <a href="https://github.com/StaRky33/ZigbeeMacropad" style="color:#e94560">
+      setup guide
+    </a>
+    to pair with Zigbee2MQTT.
+  </p>
+</body>
+</html>
