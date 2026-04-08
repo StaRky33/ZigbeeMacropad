@@ -100,3 +100,4 @@ zigbee_macropad_esp_idf/docs/
 
 # Allow release binaries
 !releases/*.bin
+!firmware/*.bin
