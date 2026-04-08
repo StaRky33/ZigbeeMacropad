@@ -1,15 +1,12 @@
 {
   "name": "Zigbee Macropad",
   "version": "2.0.0",
-  "home_assistant_domain": "zigbee2mqtt",
-  "funding_url": "https://github.com/StaRky33/ZigbeeMacropad",
-  "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-C6",
       "parts": [
         {
-          "path": "https://github.com/StaRky33/ZigbeeMacropad/releases/latest/download/macropad_v2.0.0_merged.bin",
+          "path": "https://github.com/StaRky33/ZigbeeMacropad/releases/download/v2.0.0/macropad_v2.0.0_merged.bin",
           "offset": 0
         }
       ]

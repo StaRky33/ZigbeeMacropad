@@ -97,3 +97,6 @@ zigbee_macropad_esp_idf/docs/
 
 # ESP-IDF logs
 *.log
+
+# Allow release binaries
+!releases/*.bin
