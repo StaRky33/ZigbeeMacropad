@@ -16,7 +16,7 @@ It gives 3 sorts of inputs, single click, double clicks and long click to add in
 | **Button** | 6 mm tactile push button (BOOT / Reset) |
 | **Power switch** | 13 mm by 8.5 mm on/off slide switch |
 | **Magnets** | 4 x 10 mm × 2 mm neodymium discs |
-| **Threaded inserts** | 4 x M2.5 heat-set brass inserts |
+| **Threaded inserts** | 5 x M2.5 heat-set brass inserts |
 | **Screws** | 4 x M2.5 × 5 mm machine screws |
 | **Didodes**| 16 x 1N4148 Small Signal Fast Switching Diodes |
 | **External RGB Led**| 1 x 4 pins 5mm RGB Led Common Cathode |
@@ -39,6 +39,10 @@ Files available on Github or in Printables [here](https://www.printables.com/mod
 - [Simple Cherry MX Keycap](https://www.printables.com/model/118708-simple-cherry-mx-keycap)
 
 ---
+### ⚡ Easy Install (Recommended)
+No tools needed — flash directly from your browser:  
+👉 [Web Flasher](https://starky33.github.io/ZigbeeMacropad)  
+Works on Chrome and Edge only. Connect your ESP32-C6 via USB first.
 
 ## 💻 Code
 
@@ -77,7 +81,7 @@ Calculated from **unit price × quantity used**:
 | Mechanical Switches | 8.18 € / 20 | 16 | 0.41 € | **6.54 €** |
 | Diodes 1N4148 | 1.20 € / 100 | 16 | 0.01 € | **0.19 €** |
 | Magnets | 4.99 € / 50 | 4 | 0.10 € | **0.40 €** |
-| M2.5 Inserts | 10.79 € / 600 | 9 | 0.018 € | **0.16 €** |
+| M2.5 Inserts | 10.79 € / 600 | 5 | 0.018 € | **0.09 €** |
 | Transparent PLA | 16.00 € / 1 kg | 100 g | 1.60 € | **1.60 €** |
 | 6mm Push Button | 2.23 € / 50 | 1 | 0.045 € | **0.04 €** |
 | ON/OFF Switch | 1.41 € / 5 | 1 | 0.28 € | **0.28 €** |
@@ -85,13 +89,13 @@ Calculated from **unit price × quantity used**:
 | External 5mm RGB Led Common Cathode | 1.29 € / 50 | 1 | 0.03 € | ** 0.03 €** |
 | 220ohm resistore | 0,93€ / 100 | 3 | 0.028 € | ** 0.03 €** |
    
-### **➡️ Total Cost per Macropad: 20.47 €**
+### **➡️ Total Cost per Macropad: 20.42 €**
 
 ---
 
 ## ⚠️ Note about the ESP32-C6 board
 
-Using the Seeed Studio XIAO ESP32C6 is a breethe. 
+Using the Seeed Studio XIAO ESP32C6 is a breeze. 
 
 The documentation is excellent.
 The chip already contains a BMS so you can plug the battery directly in and charge it with USB-C
@@ -142,9 +146,9 @@ In Home Assistant, open Settings → Devices & Services → Zigbee2MQTT → Perm
 Test button clicks (single, double, hold) — LED flashes will reflect the button type.
 You can now create an automation based on the button clicks.
 
-If in the Zigbee2MQTT interface/Devices/deviceName/Exposes there is not 3 attributes (Action, Brightness, Linkquality) there is an issue.
-You may have to change the cluster name to fit your home assistant. It is used 4 times in my file and called "manuSpecificAssaDoorLock".
-This name is automatically attributed by home assistant and cannot be changed.
+The cluster ID is defined as a single constant `MACROPAD_CLUSTER` at the top 
+of `macropad.mjs`. If it ever stops working after a z2m update, check the 
+z2m logs for the cluster number and update that one constant.
 To find your cluster name, simply check the logs in Zigbee2MQTT. I prefer checking them in the add-on directly since there is more information.
 Add-on logs accessible in Settings/Add-ons/Zigbee2MQTT/Log
 
@@ -153,7 +157,7 @@ Add-on logs accessible in Settings/Add-ons/Zigbee2MQTT/Log
 ## ✨ Features Summary
 
 🔘 16 mechanical switches with multiple click detection
-🔋💤 Deep Sleep feature turning on after 20 sec to save battery
+🔋💤 Deep Sleep feature turning on after 2 minutes to save battery
 💡 LED feedback brightness linked to Zigbee brightness setting
 🔄 BOOT button triggers factory reset and re-pairing
 🔴 Blinking red LED during pairing

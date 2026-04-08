@@ -34,13 +34,13 @@ static const gpio_num_t ROW_PINS[ROWS] = {
 //White macropad GPIO_NUM_18, GPIO_NUM_20, GPIO_NUM_19, GPIO_NUM_17,
 //Black macropad GPIO_NUM_17, GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_18,
 static const gpio_num_t COL_PINS[COLS] = {
-    GPIO_NUM_18, GPIO_NUM_20, GPIO_NUM_19, GPIO_NUM_17,
+    GPIO_NUM_17, GPIO_NUM_19, GPIO_NUM_20, GPIO_NUM_18,
 }; //D10, D9, D8, D7
 
 //Native physical button button on board can still be connected with external button
 //White macropad GPIO_NUM_16
 //Black macropad GPIO_NUM_9
-#define BOOT_BUTTON_GPIO     GPIO_NUM_16
+#define BOOT_BUTTON_GPIO     GPIO_NUM_9
 
 /* --- Deep sleep variables -------------------------------------- */
 #define INACTIVITY_SLEEP_MS   (120 * 1000)        // 1 minute --> 20sec test
