@@ -65,6 +65,12 @@ static uint64_t g_last_activity_us = 0;
 /* Use all channels or restrict as you like */
 #define ESP_ZB_PRIMARY_CHANNEL_MASK  ESP_ZB_TRANSCEIVER_ALL_CHANNELS_MASK
 
+/* --- Steering -------------------------------------- */
+#define STEERING_RETRY_DELAY_MS  2000
+#define STEERING_MAX_RETRIES     5
+
+static uint8_t g_steering_retries = 0;
+
 /* --- Button state machine ----------------------------------------------- */
 typedef struct {
     bool raw;
@@ -494,13 +500,14 @@ static void button_task(void *arg)
 /* ======================================================================= */
 void esp_zb_app_signal_handler(esp_zb_app_signal_t *sig)
 {
-    uint32_t *p_sg_p    = sig->p_app_signal;
+    uint32_t *p_sg_p     = sig->p_app_signal;
     esp_err_t err_status = sig->esp_err_status;
     esp_zb_app_signal_type_t sig_type = *p_sg_p;
 
     switch (sig_type) {
     case ESP_ZB_ZDO_SIGNAL_SKIP_STARTUP:
         ESP_LOGI(TAG, "Initialize Zigbee stack");
+        g_zb_ready = true;  // ✅ move here, stack is actually ready now
         esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_INITIALIZATION);
         break;
 
@@ -510,36 +517,55 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *sig)
             bool is_fn = esp_zb_bdb_is_factory_new();
             g_is_joined = !is_fn;
             g_blinking  = is_fn;
-            ESP_LOGI(TAG, "Device %s factory new", is_fn ? "is" : "is not");
+            g_steering_retries = 0;
 
             if (is_fn) {
+                ESP_LOGI(TAG, "Factory new → starting steering");
                 esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
                 esp_zb_scheduler_alarm((esp_zb_callback_t)zb_blink_step, 0, 0);
-                ESP_LOGI(TAG, "Starting network steering...");
                 esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
+            } else {
+                ESP_LOGI(TAG, "Already paired, resuming");
             }
+        } else {
+            ESP_LOGE(TAG, "Device start failed: %s", esp_err_to_name(err_status));
         }
         break;
 
     case ESP_ZB_BDB_SIGNAL_STEERING:
         if (err_status == ESP_OK) {
             g_is_joined = true;
-            g_blinking  = false;  // stop blinking
+            g_steering_retries = 0;
             zb_stop_pairing_blink();
             ESP_LOGI(TAG, "Joined network successfully");
         } else {
             g_is_joined = false;
-            g_blinking  = true;   // retry blink
-            ESP_LOGI(TAG, "Steering failed → retry & blink");
-            esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
-            esp_zb_scheduler_alarm((esp_zb_callback_t)zb_blink_step, 0, 0);
+            g_steering_retries++;
+            ESP_LOGW(TAG, "Steering failed (attempt %u/%u)",
+                     g_steering_retries, STEERING_MAX_RETRIES);
+
+            if (g_steering_retries < STEERING_MAX_RETRIES) {
+                // ✅ Auto retry after delay
+                ESP_LOGI(TAG, "Retrying in %d ms...", STEERING_RETRY_DELAY_MS);
+                g_blinking = true;
+                esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
+                esp_zb_scheduler_alarm((esp_zb_callback_t)zb_blink_step, 0, 0);
+                esp_zb_scheduler_alarm(start_network_steering, 0,
+                                       STEERING_RETRY_DELAY_MS);
+            } else {
+                // ✅ Give up after max retries, faster blink to signal error
+                ESP_LOGE(TAG, "Max retries reached, waiting for manual reset");
+                g_blinking = true;
+                // You could change blink speed here to signal "give up" state
+            }
         }
         break;
 
     case ESP_ZB_ZDO_SIGNAL_LEAVE:
         g_is_joined = false;
         g_blinking  = true;
-        ESP_LOGW(TAG, "Left network → rejoining and blinking");
+        g_steering_retries = 0;
+        ESP_LOGW(TAG, "Left network → rejoining");
         esp_zb_scheduler_alarm_cancel((esp_zb_callback_t)zb_blink_step, 0);
         esp_zb_scheduler_alarm((esp_zb_callback_t)zb_blink_step, 0, 0);
         esp_zb_scheduler_alarm(start_network_steering, 0, 1500);
