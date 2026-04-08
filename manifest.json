@@ -1,6 +1,7 @@
 {
   "name": "Zigbee Macropad",
   "version": "2.0.1",
+  "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-C6",
