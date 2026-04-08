@@ -1,12 +1,13 @@
 {
   "name": "Zigbee Macropad",
-  "version": "2.0.0",
+  "version": "2.0.1",
+  "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-C6",
       "parts": [
         {
-          "path": "https://github.com/StaRky33/ZigbeeMacropad/releases/download/v2.0.0/macropad_v2.0.0_merged.bin",
+          "path": "https://starky33.github.io/ZigbeeMacropad/firmware/macropad_v2.0.1_merged.bin",
           "offset": 0
         }
       ]
