@@ -12,7 +12,6 @@
 #pragma once
 
 #include "esp_zigbee_core.h"
-#include "zcl_utility.h"
 
 /* --- Zigbee configuration --- */
 #define MAX_CHILDREN                      10                                    /* Max number of connected children */
