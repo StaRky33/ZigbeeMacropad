@@ -42,6 +42,11 @@ static const gpio_num_t COL_PINS[COLS] = {
 //Black macropad GPIO_NUM_9
 #define BOOT_BUTTON_GPIO     GPIO_NUM_9
 
+/* Seeed XIAO ESP32C6 RF switch (required for usable Zigbee/Wi-Fi RF) */
+#define XIAO_RF_SWITCH_ENABLE_GPIO  GPIO_NUM_3   /* LOW = enable RF switch */
+#define XIAO_RF_ANT_SELECT_GPIO     GPIO_NUM_14  /* LOW = internal, HIGH = u.FL */
+#define XIAO_USE_EXTERNAL_ANTENNA   0
+
 /* --- Deep sleep variables -------------------------------------- */
 #define INACTIVITY_SLEEP_MS   (120 * 1000)        // 1 minute --> 20sec test
 #define INACTIVITY_SLEEP_US   (INACTIVITY_SLEEP_MS * 1000ULL)
@@ -858,6 +863,24 @@ void app_main(void)
     // --- Launch tasks ---
     xTaskCreate(button_task, "button_task", 4096, NULL, 1, NULL);
     xTaskCreate(boot_button_task, "boot_btn", 2048, NULL, 1, NULL);
+
+    /* --- XIAO ESP32C6 antenna / RF switch -------------------------------- */
+    {
+        gpio_config_t rfio = {
+            .pin_bit_mask = (1ULL << XIAO_RF_SWITCH_ENABLE_GPIO) |
+                            (1ULL << XIAO_RF_ANT_SELECT_GPIO),
+            .mode = GPIO_MODE_OUTPUT,
+            .pull_up_en = 0,
+            .pull_down_en = 0,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        ESP_ERROR_CHECK(gpio_config(&rfio));
+        gpio_set_level(XIAO_RF_SWITCH_ENABLE_GPIO, 0); /* enable RF switch */
+        gpio_set_level(XIAO_RF_ANT_SELECT_GPIO, XIAO_USE_EXTERNAL_ANTENNA ? 1 : 0);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        ESP_LOGI(TAG, "XIAO RF switch enabled (%s antenna)",
+                 XIAO_USE_EXTERNAL_ANTENNA ? "external" : "internal");
+    }
 
     /* --- ZIGBEE --------------------------------------------------------- */
     ESP_ERROR_CHECK(nvs_flash_init());
